@@ -33,7 +33,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
-import java.util.Map;
 
 /**
  * The REST controller for all things related to {@link com.interzero.TestServer.entity.Pet}s.
@@ -52,12 +51,6 @@ import java.util.Map;
 @RequestMapping("pets")
 public class PetController {
 
-    /**
-     * The fields pets can be sorted by: API field name to entity property path.
-     */
-    static final Map<String, String> SORTABLE_FIELDS = Map.of(
-            "id", "id", "name", "name", "species", "species", "age", "age", "ownerId", "owner.id");
-
     private final PetService petService;
 
     public PetController(@NonNull PetService petService) {
@@ -68,8 +61,8 @@ public class PetController {
      * Gets one page of the pets in the database, optionally filtered.
      * <p>
      * Filters are optional and combined with AND, e.g. {@code ?name=sp&species=dog,cat&minAge=1&ownerId=3};
-     * see {@link PetFilter}. {@code ?hasOwner=false} lists pets without an owner. Paging and sorting use the standard query parameters, e.g.
-     * {@code ?page=0&size=20&sort=name,asc}.
+     * see {@link PetFilter}. {@code ?hasOwner=false} lists pets without an owner. Paging and sorting use the standard
+     * query parameters, e.g. {@code ?page=0&size=20&sort=name,asc}.
      * Sortable fields: {@code id}, {@code name}, {@code species}, {@code age}, {@code ownerId}.
      * Defaults to the first 20 pets sorted by ID; the page size is capped at 100.
      *
@@ -85,9 +78,9 @@ public class PetController {
                                      @RequestParam(required = false) Long ownerId,
                                      @RequestParam(required = false) Boolean hasOwner,
                                      @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
-        log.info("PetController.getPets({}, ownerId={}, hasOwner={}, {}) called", filter, ownerId, hasOwner, pageable);
+        log.debug("PetController.getPets({}, ownerId={}, hasOwner={}, {}) called", filter, ownerId, hasOwner, pageable);
         return PageResponse.of(
-                petService.findAll(filter, ownerId, hasOwner, Paging.mapSort(pageable, SORTABLE_FIELDS)));
+                petService.findAll(filter, ownerId, hasOwner, Paging.mapSort(pageable, SortableFields.PETS)));
     }
 
     /**
@@ -99,7 +92,7 @@ public class PetController {
     @GetMapping("/{id}")
     @CanRead
     public ResponseEntity<PetResponse> getPet(@PathVariable Long id) {
-        log.info("PetController.getPet({}) called", id);
+        log.debug("PetController.getPet({}) called", id);
         return withETag(petService.get(id));
     }
 
@@ -113,7 +106,7 @@ public class PetController {
     @PostMapping
     @CanWrite
     public ResponseEntity<PetResponse> createPet(@Valid @RequestBody PetRequest request) {
-        log.info("PetController.createPet() called");
+        log.debug("PetController.createPet() called");
         PetResponse created = petService.create(request);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
@@ -136,7 +129,7 @@ public class PetController {
     public ResponseEntity<PetResponse> updatePet(@PathVariable Long id,
                                         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
                                         @Valid @RequestBody PetRequest request) {
-        log.info("PetController.updatePet({}) called", id);
+        log.debug("PetController.updatePet({}) called", id);
         return withETag(petService.update(id, request, ETags.parseIfMatch(ifMatch)));
     }
 
@@ -157,7 +150,7 @@ public class PetController {
     public ResponseEntity<PetResponse> patchPet(@PathVariable Long id,
                                        @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
                                        @Valid @RequestBody PetPatchRequest request) {
-        log.info("PetController.patchPet({}) called", id);
+        log.debug("PetController.patchPet({}) called", id);
         return withETag(petService.patch(id, request, ETags.parseIfMatch(ifMatch)));
     }
 
@@ -172,7 +165,7 @@ public class PetController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deletePet(@PathVariable Long id,
                           @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
-        log.info("PetController.deletePet({}) called", id);
+        log.debug("PetController.deletePet({}) called", id);
         petService.delete(id, ETags.parseIfMatch(ifMatch));
     }
 

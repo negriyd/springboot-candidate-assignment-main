@@ -25,7 +25,7 @@ public class HelloController {
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     public String hello() {
-        log.info("HelloController.hello() called");
+        log.debug("HelloController.hello() called");
         return "Hello, World!";
     }
 }

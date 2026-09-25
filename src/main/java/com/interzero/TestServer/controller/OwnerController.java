@@ -35,7 +35,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
-import java.util.Map;
 
 /**
  * The REST controller for all things related to {@link com.interzero.TestServer.entity.Owner}s.
@@ -53,12 +52,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("owners")
 public class OwnerController {
-
-    /**
-     * The fields owners can be sorted by: API field name to entity property path.
-     */
-    static final Map<String, String> SORTABLE_FIELDS = Map.of(
-            "id", "id", "nameFirst", "nameFirst", "nameLast", "nameLast", "address", "address");
 
     private final OwnerService ownerService;
 
@@ -88,8 +81,8 @@ public class OwnerController {
     @CanRead
     public PageResponse<OwnerResponse> getOwners(@Valid @ParameterObject OwnerFilter filter,
                                          @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
-        log.info("OwnerController.getOwners({}, {}) called", filter, pageable);
-        return PageResponse.of(ownerService.findAll(filter, Paging.mapSort(pageable, SORTABLE_FIELDS)));
+        log.debug("OwnerController.getOwners({}, {}) called", filter, pageable);
+        return PageResponse.of(ownerService.findAll(filter, Paging.mapSort(pageable, SortableFields.OWNERS)));
     }
 
     /**
@@ -101,7 +94,7 @@ public class OwnerController {
     @GetMapping("/{id}")
     @CanRead
     public ResponseEntity<OwnerResponse> getOwner(@PathVariable Long id) {
-        log.info("OwnerController.getOwner({}) called", id);
+        log.debug("OwnerController.getOwner({}) called", id);
         return withETag(ownerService.get(id));
     }
 
@@ -120,8 +113,8 @@ public class OwnerController {
     public PageResponse<PetResponse> getOwnerPets(@PathVariable Long id,
                                           @Valid @ParameterObject PetFilter filter,
                                           @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
-        log.info("OwnerController.getOwnerPets({}, {}, {}) called", id, filter, pageable);
-        return PageResponse.of(petService.findByOwner(id, filter, Paging.mapSort(pageable, PetController.SORTABLE_FIELDS)));
+        log.debug("OwnerController.getOwnerPets({}, {}, {}) called", id, filter, pageable);
+        return PageResponse.of(petService.findByOwner(id, filter, Paging.mapSort(pageable, SortableFields.PETS)));
     }
 
     /**
@@ -133,7 +126,7 @@ public class OwnerController {
     @PostMapping
     @CanWrite
     public ResponseEntity<OwnerResponse> createOwner(@Valid @RequestBody OwnerRequest request) {
-        log.info("OwnerController.createOwner() called");
+        log.debug("OwnerController.createOwner() called");
         OwnerResponse created = ownerService.create(request);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
@@ -155,7 +148,7 @@ public class OwnerController {
     public ResponseEntity<OwnerResponse> updateOwner(@PathVariable Long id,
                                         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
                                         @Valid @RequestBody OwnerRequest request) {
-        log.info("OwnerController.updateOwner({}) called", id);
+        log.debug("OwnerController.updateOwner({}) called", id);
         return withETag(ownerService.update(id, request, ETags.parseIfMatch(ifMatch)));
     }
 
@@ -176,7 +169,7 @@ public class OwnerController {
     public ResponseEntity<OwnerResponse> patchOwner(@PathVariable Long id,
                                        @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
                                        @Valid @RequestBody OwnerPatchRequest request) {
-        log.info("OwnerController.patchOwner({}) called", id);
+        log.debug("OwnerController.patchOwner({}) called", id);
         return withETag(ownerService.patch(id, request, ETags.parseIfMatch(ifMatch)));
     }
 
@@ -191,7 +184,7 @@ public class OwnerController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteOwner(@PathVariable Long id,
                           @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
-        log.info("OwnerController.deleteOwner({}) called", id);
+        log.debug("OwnerController.deleteOwner({}) called", id);
         ownerService.delete(id, ETags.parseIfMatch(ifMatch));
     }
 
