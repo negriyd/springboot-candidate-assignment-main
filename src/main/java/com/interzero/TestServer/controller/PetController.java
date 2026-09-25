@@ -1,5 +1,6 @@
 package com.interzero.TestServer.controller;
 
+import com.interzero.TestServer.configuration.CanRead;
 import com.interzero.TestServer.entity.Pet;
 import com.interzero.TestServer.repository.PetRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +33,8 @@ public class PetController {
      * @return All of the pets in the database.
      */
     @GetMapping
-    private List<Pet> getPets() {
+    @CanRead
+    public List<Pet> getPets() {
         log.info("PetController.getPets() called");
         return petRepository.findAll();
     }

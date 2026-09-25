@@ -5,7 +5,7 @@ import com.interzero.TestServer.error.SecurityErrorHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -20,16 +20,18 @@ import org.springframework.security.web.SecurityFilterChain;
 /**
  * Security configuration.
  * <p>
- * Access is role based:
+ * This class handles authentication only: every request (except the H2 console) must be authenticated.
+ * Role-based access is declared on controller methods with {@code @PreAuthorize}-based annotations:
  * <ul>
- *     <li>{@link Role#READER} - may only read data (GET/HEAD).</li>
- *     <li>{@link Role#WRITER} - may only write data (POST/PUT/PATCH/DELETE).</li>
- *     <li>{@link Role#ADMIN} - may do everything.</li>
+ *     <li>{@link CanRead} - {@link Role#READER} and {@link Role#ADMIN}.</li>
+ *     <li>{@link CanWrite} - {@link Role#WRITER} and {@link Role#ADMIN}.</li>
  * </ul>
- * The health check endpoint {@code GET /} is available to any authenticated user.
+ * Every controller method must carry one of these annotations (or its own {@code @PreAuthorize});
+ * otherwise it is open to any authenticated user. This is enforced by {@code EndpointSecurityCoverageTests}.
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Bean
@@ -38,14 +40,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/h2-console/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/**").hasAnyRole(Role.READER.name(), Role.ADMIN.name())
-                        .requestMatchers(HttpMethod.HEAD, "/**").hasAnyRole(Role.READER.name(), Role.ADMIN.name())
-                        .requestMatchers(HttpMethod.POST, "/**").hasAnyRole(Role.WRITER.name(), Role.ADMIN.name())
-                        .requestMatchers(HttpMethod.PUT, "/**").hasAnyRole(Role.WRITER.name(), Role.ADMIN.name())
-                        .requestMatchers(HttpMethod.PATCH, "/**").hasAnyRole(Role.WRITER.name(), Role.ADMIN.name())
-                        .requestMatchers(HttpMethod.DELETE, "/**").hasAnyRole(Role.WRITER.name(), Role.ADMIN.name())
-                        .anyRequest().hasRole(Role.ADMIN.name())
+                        .anyRequest().authenticated()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .httpBasic(basic -> basic.authenticationEntryPoint(securityErrorHandler))
