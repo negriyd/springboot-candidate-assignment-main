@@ -22,9 +22,13 @@ import org.springframework.security.web.SecurityFilterChain;
 /**
  * Security configuration.
  * <p>
- * This class handles authentication: every request must be authenticated. The only role rule declared here is for
- * the H2 console, which is not a controller and so cannot use the annotations below: it is limited to
- * {@link Role#ADMIN}, because it can run any SQL against the database.
+ * This class handles authentication: every API request must be authenticated. Two exceptions are declared here,
+ * because they are not application controllers and so cannot use the annotations below:
+ * <ul>
+ *     <li>The API documentation (Swagger UI and the OpenAPI document) is public, so that users can open it and log in
+ *     with its "Authorize" button. It describes the endpoints but returns no data.</li>
+ *     <li>The H2 console is limited to {@link Role#ADMIN}, because it can run any SQL against the database.</li>
+ * </ul>
  * Role-based access is declared on controller methods with {@code @PreAuthorize}-based annotations:
  * <ul>
  *     <li>{@link CanRead} - {@link Role#READER} and {@link Role#ADMIN}.</li>
@@ -38,11 +42,17 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    /**
+     * Swagger UI and the OpenAPI document.
+     */
+    private static final String[] API_DOCS = {"/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**"};
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, SecurityErrorHandler securityErrorHandler) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(API_DOCS).permitAll()
                         .requestMatchers(PathRequest.toH2Console()).hasRole(Role.ADMIN.name())
                         .anyRequest().authenticated()
                 )

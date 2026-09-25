@@ -69,8 +69,9 @@ The properties can be overridden without editing the file, e.g. with environment
 
 ### Try It Out
 
-- **Swagger UI:** open `http://localhost:8080/swagger-ui/index.html` and log in as the `ADMIN` user when the browser
-  asks. It documents every endpoint and parameter and can send requests.
+- **Swagger UI:** open `http://localhost:8080/swagger-ui/index.html` (no login needed to view the docs), click
+  **Authorize** and enter a username and password. "Try it out" then sends requests as that user; log in again as
+  another user to switch roles.
 - **Postman:** import `postman/PetManagement.postman_collection.json`. It has 31 requests with tests: CRUD for owners
   and pets, filtering and paging, the delete rules, and error and security cases. Credentials and the base URL are
   collection variables; set them to the values from `application.properties` before running. Run the whole collection in order (Collection Runner) with the server started, or from the
@@ -186,6 +187,8 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
   - `READER` can only read;
   - `WRITER` can only create, update and delete;
   - `ADMIN` can do both.
+- The API documentation (Swagger UI and `/v3/api-docs`) is public so that users can open it and log in with its
+  Authorize button. It describes the endpoints but returns no data; every API endpoint still requires authentication.
 - The H2 console (`/h2-console`) is available to `ADMIN` only, because it can run any SQL against the database.
 - Access rules are declared on each endpoint with `@CanRead` / `@CanWrite`. `EndpointSecurityCoverageTests` fails if
   any endpoint is missing an authorization annotation.
