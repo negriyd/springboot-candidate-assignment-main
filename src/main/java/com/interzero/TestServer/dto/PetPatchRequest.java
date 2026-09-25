@@ -1,6 +1,7 @@
 package com.interzero.TestServer.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.interzero.TestServer.entity.Owner;
 import com.interzero.TestServer.entity.Pet;
 import com.interzero.TestServer.enums.Species;
 import jakarta.validation.constraints.Max;
@@ -9,6 +10,8 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.util.function.Function;
 
 /**
  * The request body for partially updating a {@link Pet}. Only the fields present in the request are changed.
@@ -69,10 +72,11 @@ public class PetPatchRequest {
     /**
      * Copies the fields present in this request onto the given pet.
      *
-     * @param pet The pet to update.
+     * @param pet         The pet to update.
+     * @param ownerLookup Resolves an owner ID to an owner, or {@code null} to {@code null}.
      * @return The same pet, for chaining.
      */
-    public Pet applyTo(Pet pet) {
+    public Pet applyTo(Pet pet, Function<Long, Owner> ownerLookup) {
         if (name != null) {
             pet.setName(name.strip());
         }
@@ -83,7 +87,7 @@ public class PetPatchRequest {
             pet.setAge(age);
         }
         if (ownerIdPresent) {
-            pet.setOwnerId(ownerId);
+            pet.setOwner(ownerLookup.apply(ownerId));
         }
         return pet;
     }

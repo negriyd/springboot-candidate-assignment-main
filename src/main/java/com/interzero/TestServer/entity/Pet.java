@@ -1,5 +1,7 @@
 package com.interzero.TestServer.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.interzero.TestServer.enums.Species;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -7,8 +9,7 @@ import lombok.Setter;
 
 /**
  * The pet entity. This is a simple entity that has a name, species, and age.
- * It also has an owner ID, which is the ID of the owner that owns this pet.
- * A pet can only have one owner.
+ * A pet belongs to at most one {@link Owner}; an owner can have many pets.
  */
 @Getter
 @Setter
@@ -41,8 +42,21 @@ public class Pet {
     private Integer age;
 
     /**
-     * The ID of the owner that owns this pet.
+     * The owner of this pet, or {@code null} if the pet has no owner.
+     * Not serialized; clients see only {@link #getOwnerId()}.
      */
-    @Column
-    private Long ownerId;
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private Owner owner;
+
+    /**
+     * The ID of the owner that owns this pet. Does not load the owner.
+     *
+     * @return The owner ID, or {@code null} if the pet has no owner.
+     */
+    @JsonProperty("ownerId")
+    public Long getOwnerId() {
+        return owner != null ? owner.getId() : null;
+    }
 }

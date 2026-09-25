@@ -1,7 +1,9 @@
 package com.interzero.TestServer.configuration;
 
+import com.interzero.TestServer.entity.Owner;
 import com.interzero.TestServer.entity.Pet;
 import com.interzero.TestServer.enums.Species;
+import com.interzero.TestServer.repository.OwnerRepository;
 import com.interzero.TestServer.repository.PetRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -16,12 +18,15 @@ public class DataLoader implements CommandLineRunner {
 
     private final PetRepository petRepository;
 
-    public DataLoader(PetRepository petRepository) {
+    private final OwnerRepository ownerRepository;
+
+    public DataLoader(PetRepository petRepository, OwnerRepository ownerRepository) {
         this.petRepository = petRepository;
+        this.ownerRepository = ownerRepository;
     }
 
     /**
-     * Runs the data loader. This adds some pets to the database, and anything else you may require.
+     * Runs the data loader. This adds some owners and pets to the database, and anything else you may require.
      *
      * @param args The command line arguments.
      */
@@ -29,44 +34,41 @@ public class DataLoader implements CommandLineRunner {
     public void run(String... args) {
         log.info("Populating database...");
 
-        log.info("Adding pets...");
-        addPets();
+        log.info("Adding owners and pets...");
+        addOwnersAndPets();
 
         log.info("Database populated!");
     }
 
     /**
-     * Adds some pets to the database. Feel free to alter this if it doesn't fit your needs.
+     * Adds some owners and pets to the database. One owner has several pets, one has none yet,
+     * and some pets have no owner. Feel free to alter this if it doesn't fit your needs.
      */
-    public void addPets() {
-        Pet dog = new Pet();
-        dog.setName("Spot");
-        dog.setSpecies(Species.dog);
-        dog.setAge(2);
-        petRepository.save(dog);
+    public void addOwnersAndPets() {
+        Owner alice = addOwner("Alice", "Smith", "12 Oak Street");
+        addOwner("Bob", "Jones", "34 Elm Street");
 
-        Pet cat = new Pet();
-        cat.setName("Mittens");
-        cat.setSpecies(Species.cat);
-        cat.setAge(3);
-        petRepository.save(cat);
+        addPet("Spot", Species.dog, 2, alice);
+        addPet("Mittens", Species.cat, 3, alice);
+        addPet("Bun", Species.rabbit, 1, alice);
+        addPet("Hammy", Species.hamster, 1, null);
+        addPet("Tweety", Species.bird, 1, null);
+    }
 
-        Pet rabbit = new Pet();
-        rabbit.setName("Bun");
-        rabbit.setSpecies(Species.rabbit);
-        rabbit.setAge(1);
-        petRepository.save(rabbit);
+    private Owner addOwner(String nameFirst, String nameLast, String address) {
+        Owner owner = new Owner();
+        owner.setNameFirst(nameFirst);
+        owner.setNameLast(nameLast);
+        owner.setAddress(address);
+        return ownerRepository.save(owner);
+    }
 
-        Pet hamster = new Pet();
-        hamster.setName("Hammy");
-        hamster.setSpecies(Species.hamster);
-        hamster.setAge(1);
-        petRepository.save(hamster);
-
-        Pet bird = new Pet();
-        bird.setName("Tweety");
-        bird.setSpecies(Species.bird);
-        bird.setAge(1);
-        petRepository.save(bird);
+    private void addPet(String name, Species species, int age, Owner owner) {
+        Pet pet = new Pet();
+        pet.setName(name);
+        pet.setSpecies(species);
+        pet.setAge(age);
+        pet.setOwner(owner);
+        petRepository.save(pet);
     }
 }

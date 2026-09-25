@@ -1,7 +1,9 @@
 package com.interzero.TestServer;
 
+import com.interzero.TestServer.entity.Owner;
 import com.interzero.TestServer.entity.Pet;
 import com.interzero.TestServer.enums.Species;
+import com.interzero.TestServer.repository.OwnerRepository;
 import com.interzero.TestServer.repository.PetRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,25 +28,37 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class PetControllerTests {
 
-    private static final String VALID_BODY = """
-            {"name": "Rex", "species": "dog", "age": 4, "ownerId": 7}
-            """;
-
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private PetRepository petRepository;
 
+    @Autowired
+    private OwnerRepository ownerRepository;
+
+    private Owner owner;
+
     private Pet existing;
 
     @BeforeEach
-    void createPet() {
+    void createOwnerAndPet() {
+        Owner newOwner = new Owner();
+        newOwner.setNameFirst("Jane");
+        newOwner.setNameLast("Doe");
+        owner = ownerRepository.save(newOwner);
+
         Pet pet = new Pet();
         pet.setName("Felix");
         pet.setSpecies(Species.cat);
         pet.setAge(5);
         existing = petRepository.save(pet);
+    }
+
+    private String validBody() {
+        return """
+                {"name": "Rex", "species": "dog", "age": 4, "ownerId": %d}
+                """.formatted(owner.getId());
     }
 
     private MockHttpServletRequestBuilder asAdmin(MockHttpServletRequestBuilder request) {
@@ -88,6 +102,16 @@ class PetControllerTests {
     }
 
     @Test
+    void getPetsSortsByOwnerId() throws Exception {
+        existing.setOwner(owner);
+        petRepository.save(existing);
+
+        mockMvc.perform(asAdmin(get("/pets").param("sort", "ownerId,desc").param("size", "1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].ownerId").value(owner.getId()));
+    }
+
+    @Test
     void getPetsCapsPageSize() throws Exception {
         mockMvc.perform(asAdmin(get("/pets").param("size", "1000")))
                 .andExpect(status().isOk())
@@ -98,7 +122,8 @@ class PetControllerTests {
     void getPetsWithUnknownSortPropertyReturns400() throws Exception {
         mockMvc.perform(asAdmin(get("/pets").param("sort", "unknown")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Unknown property 'unknown'."));
+                .andExpect(jsonPath("$.message")
+                        .value("Cannot sort by 'unknown'; allowed: age, id, name, ownerId, species."));
     }
 
     @Test
@@ -119,14 +144,14 @@ class PetControllerTests {
 
     @Test
     void createPetReturns201WithLocation() throws Exception {
-        String location = mockMvc.perform(json(post("/pets"), VALID_BODY))
+        String location = mockMvc.perform(json(post("/pets"), validBody()))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", containsString("/pets/")))
                 .andExpect(jsonPath("$.id").isNumber())
                 .andExpect(jsonPath("$.name").value("Rex"))
                 .andExpect(jsonPath("$.species").value("dog"))
                 .andExpect(jsonPath("$.age").value(4))
-                .andExpect(jsonPath("$.ownerId").value(7))
+                .andExpect(jsonPath("$.ownerId").value(owner.getId()))
                 .andReturn().getResponse().getHeader("Location");
 
         mockMvc.perform(asAdmin(get(location)))
@@ -157,6 +182,25 @@ class PetControllerTests {
     }
 
     @Test
+    void createPetWithUnknownOwnerReturns400() throws Exception {
+        mockMvc.perform(json(post("/pets"), """
+                        {"name": "Rex", "species": "dog", "age": 4, "ownerId": %d}
+                        """.formatted(Long.MAX_VALUE)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Owner %d not found.".formatted(Long.MAX_VALUE)));
+    }
+
+    @Test
+    void patchPetAssignsOwner() throws Exception {
+        mockMvc.perform(json(patch("/pets/{id}", existing.getId()), """
+                        {"ownerId": %d}
+                        """.formatted(owner.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ownerId").value(owner.getId()))
+                .andExpect(jsonPath("$.name").value("Felix"));
+    }
+
+    @Test
     void createPetWithUnknownSpeciesReturns400() throws Exception {
         mockMvc.perform(json(post("/pets"), """
                         {"name": "Nemo", "species": "fish", "age": 1}
@@ -166,7 +210,7 @@ class PetControllerTests {
 
     @Test
     void updatePetReplacesFields() throws Exception {
-        mockMvc.perform(json(put("/pets/{id}", existing.getId()), VALID_BODY))
+        mockMvc.perform(json(put("/pets/{id}", existing.getId()), validBody()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(existing.getId()))
                 .andExpect(jsonPath("$.name").value("Rex"))
@@ -178,13 +222,13 @@ class PetControllerTests {
 
     @Test
     void updateUnknownPetReturns404() throws Exception {
-        mockMvc.perform(json(put("/pets/{id}", Long.MAX_VALUE), VALID_BODY))
+        mockMvc.perform(json(put("/pets/{id}", Long.MAX_VALUE), validBody()))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     void patchPetChangesOnlyGivenFields() throws Exception {
-        existing.setOwnerId(3L);
+        existing.setOwner(owner);
         petRepository.save(existing);
 
         mockMvc.perform(json(patch("/pets/{id}", existing.getId()), """
@@ -195,7 +239,7 @@ class PetControllerTests {
                 .andExpect(jsonPath("$.name").value("Felix"))
                 .andExpect(jsonPath("$.species").value("cat"))
                 .andExpect(jsonPath("$.age").value(6))
-                .andExpect(jsonPath("$.ownerId").value(3));
+                .andExpect(jsonPath("$.ownerId").value(owner.getId()));
 
         assertThat(petRepository.findById(existing.getId())).get()
                 .extracting(Pet::getAge).isEqualTo(6);
@@ -203,7 +247,7 @@ class PetControllerTests {
 
     @Test
     void patchPetWithNullOwnerRemovesOwner() throws Exception {
-        existing.setOwnerId(3L);
+        existing.setOwner(owner);
         petRepository.save(existing);
 
         mockMvc.perform(json(patch("/pets/{id}", existing.getId()), """
@@ -285,7 +329,7 @@ class PetControllerTests {
         mockMvc.perform(get("/pets/{id}", existing.getId()).with(httpBasic("reader", "reader-password")))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/pets").with(httpBasic("reader", "reader-password"))
-                        .contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                        .contentType(MediaType.APPLICATION_JSON).content(validBody()))
                 .andExpect(status().isForbidden());
         mockMvc.perform(delete("/pets/{id}", existing.getId()).with(httpBasic("reader", "reader-password")))
                 .andExpect(status().isForbidden());
@@ -296,7 +340,7 @@ class PetControllerTests {
         mockMvc.perform(get("/pets/{id}", existing.getId()).with(httpBasic("writer", "writer-password")))
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/pets").with(httpBasic("writer", "writer-password"))
-                        .contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                        .contentType(MediaType.APPLICATION_JSON).content(validBody()))
                 .andExpect(status().isCreated());
     }
 }

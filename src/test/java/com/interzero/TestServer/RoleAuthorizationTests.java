@@ -21,8 +21,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Verifies the role rules: reader reads only, writer writes only, admin does everything.
  * <p>
- * The API has no write endpoints yet, so {@link AccessTestController} provides test-only endpoints
- * protected by {@link CanRead} and {@link CanWrite}.
+ * {@link AccessTestController} provides test-only endpoints protected by {@link CanRead} and {@link CanWrite},
+ * so the rules are checked independently of the real API.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
