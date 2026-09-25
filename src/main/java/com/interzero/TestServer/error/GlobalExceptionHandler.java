@@ -11,6 +11,8 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.util.StringUtils;
+import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -73,11 +75,14 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, ex.getMessage(), request);
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex,
-                                                          HttpServletRequest request) {
+    /**
+     * Handles invalid request bodies ({@code @Valid @RequestBody}) and invalid query parameter objects
+     * ({@code @Valid} filters). {@link MethodArgumentNotValidException} is a {@link BindException}, so both are covered.
+     */
+    @ExceptionHandler(BindException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(BindException ex, HttpServletRequest request) {
         String message = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .map(GlobalExceptionHandler::describe)
                 .collect(Collectors.joining("; "));
         if (message.isEmpty()) {
             message = "Request validation failed.";
@@ -156,6 +161,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex, HttpServletRequest request) {
         log.error("Unexpected error on {} {}", request.getMethod(), request.getRequestURI(), ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred.", request);
+    }
+
+    /**
+     * Describes a field error. A binding failure (e.g. {@code ?species=fish}) would otherwise expose a Spring
+     * conversion message with Java class names, so it gets a short message instead.
+     */
+    private static String describe(FieldError error) {
+        if (error.isBindingFailure()) {
+            return "%s: invalid value '%s'".formatted(error.getField(), error.getRejectedValue());
+        }
+        return error.getField() + ": " + error.getDefaultMessage();
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String message, HttpServletRequest request) {

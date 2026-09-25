@@ -3,6 +3,7 @@ package com.interzero.TestServer.controller;
 import com.interzero.TestServer.configuration.CanRead;
 import com.interzero.TestServer.configuration.CanWrite;
 import com.interzero.TestServer.dto.PageResponse;
+import com.interzero.TestServer.dto.PetFilter;
 import com.interzero.TestServer.dto.PetPatchRequest;
 import com.interzero.TestServer.dto.PetRequest;
 import com.interzero.TestServer.entity.Pet;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -56,20 +58,29 @@ public class PetController {
     }
 
     /**
-     * Gets one page of the pets in the database.
+     * Gets one page of the pets in the database, optionally filtered.
      * <p>
-     * Paging and sorting use the standard query parameters, e.g. {@code ?page=0&size=20&sort=name,asc}.
+     * Filters are optional and combined with AND, e.g. {@code ?name=sp&species=dog,cat&minAge=1&ownerId=3};
+     * see {@link PetFilter}. {@code ?hasOwner=false} lists pets without an owner. Paging and sorting use the standard query parameters, e.g.
+     * {@code ?page=0&size=20&sort=name,asc}.
      * Sortable fields: {@code id}, {@code name}, {@code species}, {@code age}, {@code ownerId}.
      * Defaults to the first 20 pets sorted by ID; the page size is capped at 100.
      *
+     * @param filter   The filter criteria.
+     * @param ownerId  If given, only pets of this owner are returned.
+     * @param hasOwner If given, only pets with an owner ({@code true}) or without one ({@code false}).
      * @param pageable The requested page and sort order.
-     * @return The requested page of pets.
+     * @return The requested page of pets, or 400 if a filter value is invalid.
      */
     @GetMapping
     @CanRead
-    public PageResponse<Pet> getPets(@ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
-        log.info("PetController.getPets({}) called", pageable);
-        return PageResponse.of(petService.findAll(Paging.mapSort(pageable, SORTABLE_FIELDS)));
+    public PageResponse<Pet> getPets(@Valid @ParameterObject PetFilter filter,
+                                     @RequestParam(required = false) Long ownerId,
+                                     @RequestParam(required = false) Boolean hasOwner,
+                                     @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
+        log.info("PetController.getPets({}, ownerId={}, hasOwner={}, {}) called", filter, ownerId, hasOwner, pageable);
+        return PageResponse.of(
+                petService.findAll(filter, ownerId, hasOwner, Paging.mapSort(pageable, SORTABLE_FIELDS)));
     }
 
     /**

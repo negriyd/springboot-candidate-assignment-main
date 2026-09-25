@@ -1,5 +1,6 @@
 package com.interzero.TestServer.service;
 
+import com.interzero.TestServer.dto.OwnerFilter;
 import com.interzero.TestServer.dto.OwnerPatchRequest;
 import com.interzero.TestServer.dto.OwnerRequest;
 import com.interzero.TestServer.entity.Owner;
@@ -36,14 +37,15 @@ public class OwnerService {
     }
 
     /**
-     * Gets one page of owners.
+     * Gets one page of the owners that match a filter.
      *
+     * @param filter   The filter; missing criteria are ignored.
      * @param pageable The page and sort order, with sort properties already mapped to entity properties.
      * @return The requested page of owners.
      */
     @Transactional(readOnly = true)
-    public Page<Owner> findAll(Pageable pageable) {
-        return ownerRepository.findAll(pageable);
+    public Page<Owner> findAll(OwnerFilter filter, Pageable pageable) {
+        return ownerRepository.findAll(Specifications.owners(filter), pageable);
     }
 
     /**

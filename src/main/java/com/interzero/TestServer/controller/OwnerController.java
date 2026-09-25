@@ -2,9 +2,11 @@ package com.interzero.TestServer.controller;
 
 import com.interzero.TestServer.configuration.CanRead;
 import com.interzero.TestServer.configuration.CanWrite;
+import com.interzero.TestServer.dto.OwnerFilter;
 import com.interzero.TestServer.dto.OwnerPatchRequest;
 import com.interzero.TestServer.dto.OwnerRequest;
 import com.interzero.TestServer.dto.PageResponse;
+import com.interzero.TestServer.dto.PetFilter;
 import com.interzero.TestServer.entity.Owner;
 import com.interzero.TestServer.entity.Pet;
 import com.interzero.TestServer.service.OwnerService;
@@ -64,20 +66,23 @@ public class OwnerController {
     }
 
     /**
-     * Gets one page of the owners in the database.
+     * Gets one page of the owners in the database, optionally filtered.
      * <p>
+     * Filters are optional and combined with AND, e.g. {@code ?nameLast=smi&address=oak}; see {@link OwnerFilter}.
      * Paging and sorting use the standard query parameters, e.g. {@code ?page=0&size=20&sort=nameLast,asc}.
      * Sortable fields: {@code id}, {@code nameFirst}, {@code nameLast}, {@code address}.
      * Defaults to the first 20 owners sorted by ID; the page size is capped at 100.
      *
+     * @param filter   The filter criteria.
      * @param pageable The requested page and sort order.
-     * @return The requested page of owners.
+     * @return The requested page of owners, or 400 if a filter value is invalid.
      */
     @GetMapping
     @CanRead
-    public PageResponse<Owner> getOwners(@ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
-        log.info("OwnerController.getOwners({}) called", pageable);
-        return PageResponse.of(ownerService.findAll(Paging.mapSort(pageable, SORTABLE_FIELDS)));
+    public PageResponse<Owner> getOwners(@Valid @ParameterObject OwnerFilter filter,
+                                         @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
+        log.info("OwnerController.getOwners({}, {}) called", filter, pageable);
+        return PageResponse.of(ownerService.findAll(filter, Paging.mapSort(pageable, SORTABLE_FIELDS)));
     }
 
     /**
@@ -94,18 +99,22 @@ public class OwnerController {
     }
 
     /**
-     * Gets one page of the pets of an owner. Paging and sorting work as for {@code GET /pets}.
+     * Gets one page of the pets of an owner, optionally filtered. Filtering, paging and sorting work as for
+     * {@code GET /pets} (without {@code ownerId}, which comes from the path).
      *
      * @param id       The ID of the owner.
+     * @param filter   The filter criteria.
      * @param pageable The requested page and sort order.
-     * @return The requested page of the owner's pets, or 404 if no owner with this ID exists.
+     * @return The requested page of the owner's pets, 404 if no owner with this ID exists,
+     * or 400 if a filter value is invalid.
      */
     @GetMapping("/{id}/pets")
     @CanRead
     public PageResponse<Pet> getOwnerPets(@PathVariable Long id,
+                                          @Valid @ParameterObject PetFilter filter,
                                           @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
-        log.info("OwnerController.getOwnerPets({}, {}) called", id, pageable);
-        return PageResponse.of(petService.findByOwner(id, Paging.mapSort(pageable, PetController.SORTABLE_FIELDS)));
+        log.info("OwnerController.getOwnerPets({}, {}, {}) called", id, filter, pageable);
+        return PageResponse.of(petService.findByOwner(id, filter, Paging.mapSort(pageable, PetController.SORTABLE_FIELDS)));
     }
 
     /**

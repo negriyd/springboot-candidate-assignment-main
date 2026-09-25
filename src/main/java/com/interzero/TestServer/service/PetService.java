@@ -1,5 +1,6 @@
 package com.interzero.TestServer.service;
 
+import com.interzero.TestServer.dto.PetFilter;
 import com.interzero.TestServer.dto.PetPatchRequest;
 import com.interzero.TestServer.dto.PetRequest;
 import com.interzero.TestServer.entity.Owner;
@@ -37,30 +38,34 @@ public class PetService {
     }
 
     /**
-     * Gets one page of pets.
+     * Gets one page of the pets that match a filter.
      *
+     * @param filter   The filter; missing criteria are ignored.
+     * @param ownerId  If not {@code null}, only pets of this owner are returned. Not checked for existence.
+     * @param hasOwner If not {@code null}, only pets with an owner ({@code true}) or without one ({@code false}).
      * @param pageable The page and sort order, with sort properties already mapped to entity properties.
      * @return The requested page of pets.
      */
     @Transactional(readOnly = true)
-    public Page<Pet> findAll(Pageable pageable) {
-        return petRepository.findAll(pageable);
+    public Page<Pet> findAll(PetFilter filter, Long ownerId, Boolean hasOwner, Pageable pageable) {
+        return petRepository.findAll(Specifications.pets(filter, ownerId, hasOwner), pageable);
     }
 
     /**
-     * Gets one page of the pets of an owner.
+     * Gets one page of the pets of an owner that match a filter.
      *
      * @param ownerId  The ID of the owner.
+     * @param filter   The filter; missing criteria are ignored.
      * @param pageable The page and sort order, with sort properties already mapped to entity properties.
      * @return The requested page of pets.
      * @throws ResourceNotFoundException If no owner with this ID exists.
      */
     @Transactional(readOnly = true)
-    public Page<Pet> findByOwner(Long ownerId, Pageable pageable) {
+    public Page<Pet> findByOwner(Long ownerId, PetFilter filter, Pageable pageable) {
         if (!ownerRepository.existsById(ownerId)) {
             throw new ResourceNotFoundException("Owner %d not found.".formatted(ownerId));
         }
-        return petRepository.findByOwner_Id(ownerId, pageable);
+        return findAll(filter, ownerId, null, pageable);
     }
 
     /**
