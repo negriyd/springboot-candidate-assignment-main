@@ -55,32 +55,49 @@ pets on every start. Data is not kept between restarts.
 
 ### Credentials
 
-Every request needs HTTP Basic authentication. Each user has one role (configured in `application.properties`):
+Every request needs HTTP Basic authentication. There is one user per role; their usernames and passwords are
+configured in `src/main/resources/application.properties`:
 
-| User     | Password          | Access                   |
-|----------|-------------------|--------------------------|
-| `reader` | `reader-password` | read only (`GET`)        |
-| `writer` | `writer-password` | create, update, delete   |
-| `admin`  | `admin-password`  | everything               |
+| Role     | Properties                                                          | Access                 |
+|----------|---------------------------------------------------------------------|------------------------|
+| `READER` | `app.security.reader.username`, `app.security.reader.password`      | read only (`GET`)      |
+| `WRITER` | `app.security.writer.username`, `app.security.writer.password`      | create, update, delete |
+| `ADMIN`  | `app.security.admin.username`, `app.security.admin.password`        | everything             |
+
+The properties can be overridden without editing the file, e.g. with environment variables such as
+`APP_SECURITY_ADMIN_PASSWORD`.
 
 ### Try It Out
 
-- **Swagger UI:** open `http://localhost:8080/swagger-ui/index.html` and log in as `admin` when the browser asks.
-  It documents every endpoint and parameter and can send requests.
+- **Swagger UI:** open `http://localhost:8080/swagger-ui/index.html` and log in as the `ADMIN` user when the browser
+  asks. It documents every endpoint and parameter and can send requests.
+- **Postman:** import `postman/PetManagement.postman_collection.json`. It has 31 requests with tests: CRUD for owners
+  and pets, filtering and paging, the delete rules, and error and security cases. Credentials and the base URL are
+  collection variables; set them to the values from `application.properties` before running. Run the whole collection in order (Collection Runner) with the server started, or from the
+  command line:
+
+```bash
+npx newman run postman/PetManagement.postman_collection.json
+```
+
 - **curl:**
 
 ```bash
+# Credentials from application.properties, as "username:password"
+READER='<reader-username>:<reader-password>'
+WRITER='<writer-username>:<writer-password>'
+
 # Health check
-curl -u reader:reader-password http://localhost:8080
+curl -u "$READER" http://localhost:8080
 
 # Dogs and cats, oldest first, 10 per page
-curl -u reader:reader-password "http://localhost:8080/pets?species=dog,cat&sort=age,desc&size=10"
+curl -u "$READER" "http://localhost:8080/pets?species=dog,cat&sort=age,desc&size=10"
 
 # Pets without an owner
-curl -u reader:reader-password "http://localhost:8080/pets?hasOwner=false"
+curl -u "$READER" "http://localhost:8080/pets?hasOwner=false"
 
 # Create an owner
-curl -u writer:writer-password -X POST http://localhost:8080/owners \
+curl -u "$WRITER" -X POST http://localhost:8080/owners \
      -H "Content-Type: application/json" \
      -d '{"nameFirst": "Carol", "nameLast": "White"}'
 ```
@@ -152,9 +169,9 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
 
 - Stateless HTTP Basic authentication with three in-memory users, one per role (credentials in
   `application.properties`):
-  - `reader` can only read;
-  - `writer` can only create, update and delete;
-  - `admin` can do both.
+  - `READER` can only read;
+  - `WRITER` can only create, update and delete;
+  - `ADMIN` can do both.
 - Access rules are declared on each endpoint with `@CanRead` / `@CanWrite`. `EndpointSecurityCoverageTests` fails if
   any endpoint is missing an authorization annotation.
 

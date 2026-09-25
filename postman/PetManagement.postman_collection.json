@@ -1,0 +1,1221 @@
+{
+  "info": {
+    "name": "Pet Management System",
+    "description": "Requests for the Pet Management API, with tests.\n\nStart the server (`./mvnw spring-boot:run`), then run the whole collection in order (Collection Runner, or `npx newman run postman/PetManagement.postman_collection.json`). Folders build on each other: \"Owners\" and \"Pets\" create the records that later folders use via the `ownerId` and `petId` variables.\n\nRequests authenticate as `admin` unless a request says otherwise. Credentials and the base URL are collection variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "username",
+        "value": "{{adminUser}}",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "value": "{{adminPassword}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "readerUser",
+      "value": "reader"
+    },
+    {
+      "key": "readerPassword",
+      "value": "reader-password"
+    },
+    {
+      "key": "writerUser",
+      "value": "writer"
+    },
+    {
+      "key": "writerPassword",
+      "value": "writer-password"
+    },
+    {
+      "key": "adminUser",
+      "value": "admin"
+    },
+    {
+      "key": "adminPassword",
+      "value": "admin-password"
+    },
+    {
+      "key": "ownerId",
+      "value": ""
+    },
+    {
+      "key": "petId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "description": "Checks that the server is running and the credentials work. Any role can call it.",
+      "item": [
+        {
+          "name": "Hello",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [],
+              "raw": "{{baseUrl}}/"
+            },
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{readerUser}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{readerPassword}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Greets\", () => pm.expect(pm.response.text()).to.eql(\"Hello, World!\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Owners",
+      "description": "CRUD for owners. Run in order: \"Create owner\" saves `ownerId` for the other requests.",
+      "item": [
+        {
+          "name": "Create owner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owners"
+              ],
+              "raw": "{{baseUrl}}/owners"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nameFirst\": \"Carol\",\n  \"nameLast\": \"White\",\n  \"address\": \"7 Pine Street\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Has Location header\", () => pm.response.to.have.header(\"Location\"));",
+                  "const owner = pm.response.json();",
+                  "pm.collectionVariables.set(\"ownerId\", owner.id);",
+                  "pm.test(\"Returns the owner\", () => pm.expect(owner.nameLast).to.eql(\"White\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List owners (paged, sorted)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owners"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "sort",
+                  "value": "nameLast,asc"
+                }
+              ],
+              "raw": "{{baseUrl}}/owners?page=0&size=20&sort=nameLast,asc"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Is a page\", () => pm.expect(pm.response.json()).to.have.keys(\"content\", \"page\", \"size\", \"totalElements\", \"totalPages\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get owner",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owners",
+                "{{ownerId}}"
+              ],
+              "raw": "{{baseUrl}}/owners/{{ownerId}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Is the created owner\", () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get(\"ownerId\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replace owner (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owners",
+                "{{ownerId}}"
+              ],
+              "raw": "{{baseUrl}}/owners/{{ownerId}}"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nameFirst\": \"Caroline\",\n  \"nameLast\": \"White\",\n  \"address\": \"8 Pine Street\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Fields replaced\", () => pm.expect(pm.response.json().nameFirst).to.eql(\"Caroline\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Partially update owner (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/merge-patch+json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owners",
+                "{{ownerId}}"
+              ],
+              "raw": "{{baseUrl}}/owners/{{ownerId}}"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": null\n}"
+            },
+            "description": "Only the given fields change. An explicit `null` clears the optional `address`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const owner = pm.response.json();",
+                  "pm.test(\"Address cleared\", () => pm.expect(owner.address).to.be.null);",
+                  "pm.test(\"Other fields kept\", () => pm.expect(owner.nameFirst).to.eql(\"Caroline\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pets",
+      "description": "CRUD for pets. Run after \"Owners\": \"Create pet\" assigns the pet to `ownerId` and saves `petId`.",
+      "item": [
+        {
+          "name": "Create pet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "raw": "{{baseUrl}}/pets"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rex\",\n  \"species\": \"dog\",\n  \"age\": 3,\n  \"ownerId\": {{ownerId}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Has Location header\", () => pm.response.to.have.header(\"Location\"));",
+                  "const pet = pm.response.json();",
+                  "pm.collectionVariables.set(\"petId\", pet.id);",
+                  "pm.test(\"Belongs to the owner\", () => pm.expect(pet.ownerId).to.eql(pm.collectionVariables.get(\"ownerId\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List pets (paged)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ],
+              "raw": "{{baseUrl}}/pets?page=0&size=20"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has content\", () => pm.expect(pm.response.json().content).to.be.an(\"array\").that.is.not.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get pet",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets",
+                "{{petId}}"
+              ],
+              "raw": "{{baseUrl}}/pets/{{petId}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Is the created pet\", () => pm.expect(pm.response.json().name).to.eql(\"Rex\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replace pet (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets",
+                "{{petId}}"
+              ],
+              "raw": "{{baseUrl}}/pets/{{petId}}"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rex\",\n  \"species\": \"dog\",\n  \"age\": 4,\n  \"ownerId\": {{ownerId}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Age replaced\", () => pm.expect(pm.response.json().age).to.eql(4));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Partially update pet (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets",
+                "{{petId}}"
+              ],
+              "raw": "{{baseUrl}}/pets/{{petId}}"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rexy\"\n}"
+            },
+            "description": "Only the given fields change; the owner is kept because `ownerId` is not in the body."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const pet = pm.response.json();",
+                  "pm.test(\"Name changed\", () => pm.expect(pet.name).to.eql(\"Rexy\"));",
+                  "pm.test(\"Owner kept\", () => pm.expect(pet.ownerId).to.eql(pm.collectionVariables.get(\"ownerId\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get owner's pets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owners",
+                "{{ownerId}}",
+                "pets"
+              ],
+              "raw": "{{baseUrl}}/owners/{{ownerId}}/pets"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Owner has one pet\", () => pm.expect(pm.response.json().totalElements).to.eql(1));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Filtering, paging and sorting",
+      "description": "Optional filters on list endpoints, combined with AND. Run after \"Pets\".",
+      "item": [
+        {
+          "name": "Pets by species and age range",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "query": [
+                {
+                  "key": "species",
+                  "value": "dog,cat"
+                },
+                {
+                  "key": "minAge",
+                  "value": "1"
+                },
+                {
+                  "key": "maxAge",
+                  "value": "10"
+                },
+                {
+                  "key": "sort",
+                  "value": "age,desc"
+                }
+              ],
+              "raw": "{{baseUrl}}/pets?species=dog,cat&minAge=1&maxAge=10&sort=age,desc"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const pets = pm.response.json().content;",
+                  "pm.test(\"Only dogs and cats aged 1-10\", () => pets.forEach(p => {",
+                  "    pm.expect([\"dog\", \"cat\"]).to.include(p.species);",
+                  "    pm.expect(p.age).to.be.within(1, 10);",
+                  "}));",
+                  "pm.test(\"Sorted by age, oldest first\", () => pm.expect(pets.map(p => p.age)).to.eql([...pets.map(p => p.age)].sort((a, b) => b - a)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pets by name (case-insensitive)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "REXY"
+                }
+              ],
+              "raw": "{{baseUrl}}/pets?name=REXY"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Finds the pet\", () => pm.expect(pm.response.json().content.map(p => p.id)).to.include(pm.collectionVariables.get(\"petId\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pets of an owner",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "query": [
+                {
+                  "key": "ownerId",
+                  "value": "{{ownerId}}"
+                }
+              ],
+              "raw": "{{baseUrl}}/pets?ownerId={{ownerId}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"All belong to the owner\", () => pm.response.json().content.forEach(p => pm.expect(p.ownerId).to.eql(pm.collectionVariables.get(\"ownerId\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pets without an owner",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "query": [
+                {
+                  "key": "hasOwner",
+                  "value": "false"
+                }
+              ],
+              "raw": "{{baseUrl}}/pets?hasOwner=false"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"None has an owner\", () => pm.response.json().content.forEach(p => pm.expect(p.ownerId).to.be.null));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owners by last name",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owners"
+              ],
+              "query": [
+                {
+                  "key": "nameLast",
+                  "value": "whi"
+                }
+              ],
+              "raw": "{{baseUrl}}/owners?nameLast=whi"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Finds the owner\", () => pm.expect(pm.response.json().content.map(o => o.id)).to.include(pm.collectionVariables.get(\"ownerId\")));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Deleting",
+      "description": "Shows the delete rules: an owner with pets cannot be deleted (409) until the pets are reassigned. Run after \"Pets\".",
+      "item": [
+        {
+          "name": "Delete owner with pets (409)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owners",
+                "{{ownerId}}"
+              ],
+              "raw": "{{baseUrl}}/owners/{{ownerId}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"Explains why\", () => pm.expect(pm.response.json().message).to.include(\"still has pets\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remove pet's owner (PATCH ownerId null)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets",
+                "{{petId}}"
+              ],
+              "raw": "{{baseUrl}}/pets/{{petId}}"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ownerId\": null\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Pet has no owner\", () => pm.expect(pm.response.json().ownerId).to.be.null);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete owner",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owners",
+                "{{ownerId}}"
+              ],
+              "raw": "{{baseUrl}}/owners/{{ownerId}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete pet",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets",
+                "{{petId}}"
+              ],
+              "raw": "{{baseUrl}}/pets/{{petId}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get deleted pet (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets",
+                "{{petId}}"
+              ],
+              "raw": "{{baseUrl}}/pets/{{petId}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Errors and security",
+      "description": "Error responses. Every error has the same JSON body: timestamp, status, error, message, path. Independent of the other folders.",
+      "item": [
+        {
+          "name": "No credentials (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "raw": "{{baseUrl}}/pets"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Asks for Basic auth\", () => pm.response.to.have.header(\"WWW-Authenticate\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Wrong password (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "raw": "{{baseUrl}}/pets"
+            },
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{adminUser}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "wrong-password",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reader cannot write (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "raw": "{{baseUrl}}/pets"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nope\",\n  \"species\": \"cat\",\n  \"age\": 1\n}"
+            },
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{readerUser}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{readerPassword}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Writer cannot read (403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "raw": "{{baseUrl}}/pets"
+            },
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{writerUser}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{writerPassword}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid body (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "raw": "{{baseUrl}}/pets"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \" \",\n  \"age\": -1\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));",
+                  "const message = pm.response.json().message;",
+                  "pm.test(\"Lists every invalid field\", () => [\"name:\", \"species:\", \"age:\"].forEach(f => pm.expect(message).to.include(f)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown owner in body (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "raw": "{{baseUrl}}/pets"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ghost\",\n  \"species\": \"cat\",\n  \"age\": 1,\n  \"ownerId\": 999999\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Names the owner\", () => pm.expect(pm.response.json().message).to.eql(\"Owner 999999 not found.\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid filter value (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "query": [
+                {
+                  "key": "species",
+                  "value": "fish"
+                }
+              ],
+              "raw": "{{baseUrl}}/pets?species=fish"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Names the value\", () => pm.expect(pm.response.json().message).to.eql(\"species: invalid value 'fish'\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown sort field (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets"
+              ],
+              "query": [
+                {
+                  "key": "sort",
+                  "value": "weight"
+                }
+              ],
+              "raw": "{{baseUrl}}/pets?sort=weight"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Lists allowed fields\", () => pm.expect(pm.response.json().message).to.include(\"allowed:\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pet not found (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pets",
+                "999999"
+              ],
+              "raw": "{{baseUrl}}/pets/999999"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Error body shape\", () => pm.expect(pm.response.json()).to.have.keys(\"timestamp\", \"status\", \"error\", \"message\", \"path\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
