@@ -7,6 +7,7 @@ import com.interzero.TestServer.entity.Owner;
 import com.interzero.TestServer.entity.Pet;
 import com.interzero.TestServer.error.InvalidReferenceException;
 import com.interzero.TestServer.error.ResourceNotFoundException;
+import com.interzero.TestServer.error.VersionMismatchException;
 import com.interzero.TestServer.repository.OwnerRepository;
 import com.interzero.TestServer.repository.PetRepository;
 import org.springframework.data.domain.Page;
@@ -82,6 +83,15 @@ public class PetService {
     }
 
     /**
+     * Gets a pet to change, checking that it still has the version the client expects.
+     */
+    private Pet getForUpdate(Long id, Long expectedVersion) {
+        Pet pet = get(id);
+        Versions.check("Pet", id, pet.getVersion(), expectedVersion);
+        return pet;
+    }
+
+    /**
      * Creates a new pet.
      *
      * @param request The pet to create.
@@ -95,38 +105,47 @@ public class PetService {
     /**
      * Replaces all fields of an existing pet.
      *
-     * @param id      The ID of the pet.
-     * @param request The new state of the pet.
+     * @param id              The ID of the pet.
+     * @param request         The new state of the pet.
+     * @param expectedVersion The version the client last read ({@code If-Match}), or {@code null} to skip
+     *                        the check.
      * @return The updated pet.
-     * @throws ResourceNotFoundException  If no pet with this ID exists.
+     * @throws ResourceNotFoundException If no pet with this ID exists.
      * @throws InvalidReferenceException If the request refers to an owner that does not exist.
+     * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
      */
-    public Pet update(Long id, PetRequest request) {
-        return petRepository.save(request.applyTo(get(id), this::findOwnerForPet));
+    public Pet update(Long id, PetRequest request, Long expectedVersion) {
+        return petRepository.save(request.applyTo(getForUpdate(id, expectedVersion), this::findOwnerForPet));
     }
 
     /**
      * Partially updates an existing pet. See {@link PetPatchRequest} for how missing and {@code null} fields are
      * treated.
      *
-     * @param id      The ID of the pet.
-     * @param request The fields to change.
+     * @param id              The ID of the pet.
+     * @param request         The fields to change.
+     * @param expectedVersion The version the client last read ({@code If-Match}), or {@code null} to skip
+     *                        the check.
      * @return The updated pet.
-     * @throws ResourceNotFoundException  If no pet with this ID exists.
+     * @throws ResourceNotFoundException If no pet with this ID exists.
      * @throws InvalidReferenceException If the request refers to an owner that does not exist.
+     * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
      */
-    public Pet patch(Long id, PetPatchRequest request) {
-        return petRepository.save(request.applyTo(get(id), this::findOwnerForPet));
+    public Pet patch(Long id, PetPatchRequest request, Long expectedVersion) {
+        return petRepository.save(request.applyTo(getForUpdate(id, expectedVersion), this::findOwnerForPet));
     }
 
     /**
      * Deletes a pet.
      *
-     * @param id The ID of the pet.
+     * @param id              The ID of the pet.
+     * @param expectedVersion The version the client last read ({@code If-Match}), or {@code null} to skip
+     *                        the check.
      * @throws ResourceNotFoundException If no pet with this ID exists.
+     * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
      */
-    public void delete(Long id) {
-        petRepository.delete(get(id));
+    public void delete(Long id, Long expectedVersion) {
+        petRepository.delete(getForUpdate(id, expectedVersion));
     }
 
     private Owner findOwnerForPet(Long ownerId) {

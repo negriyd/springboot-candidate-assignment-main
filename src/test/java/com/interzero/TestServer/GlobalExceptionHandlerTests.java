@@ -8,6 +8,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -61,6 +62,12 @@ class GlobalExceptionHandlerTests {
             throw new DataIntegrityViolationException("duplicate key");
         }
 
+        @GetMapping("/optimistic-lock")
+        @CanRead
+        public String optimisticLock() {
+            throw new ObjectOptimisticLockingFailureException(Object.class, 1L);
+        }
+
         @GetMapping("/typed/{id}")
         @CanRead
         public String typed(@PathVariable Long id) {
@@ -101,6 +108,14 @@ class GlobalExceptionHandlerTests {
         mockMvc.perform(asAdmin(get("/test-errors/status")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Pet 42 not found."));
+    }
+
+    @Test
+    void optimisticLockFailureReturns409() throws Exception {
+        mockMvc.perform(asAdmin(get("/test-errors/optimistic-lock")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        "The resource was modified by another request at the same time; fetch it again and retry."));
     }
 
     @Test

@@ -12,6 +12,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -36,6 +37,9 @@ class PetControllerTests {
 
     @Autowired
     private OwnerRepository ownerRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private Owner owner;
 
@@ -124,6 +128,13 @@ class PetControllerTests {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value("Cannot sort by 'unknown'; allowed: age, id, name, ownerId, species."));
+    }
+
+    @Test
+    void speciesIsStoredByName() {
+        String stored = jdbcTemplate.queryForObject(
+                "SELECT species FROM pet WHERE id = ?", String.class, existing.getId());
+        assertThat(stored).isEqualTo("cat");
     }
 
     @Test

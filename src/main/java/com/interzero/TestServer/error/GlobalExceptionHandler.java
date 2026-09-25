@@ -3,6 +3,7 @@ package com.interzero.TestServer.error;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -73,6 +74,26 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleResourceConflict(ResourceConflictException ex,
                                                                 HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, ex.getMessage(), request);
+    }
+
+    /**
+     * Handles an {@code If-Match} header that does not match the resource's current {@code ETag}.
+     */
+    @ExceptionHandler(VersionMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleVersionMismatch(VersionMismatchException ex,
+                                                               HttpServletRequest request) {
+        return build(HttpStatus.PRECONDITION_FAILED, ex.getMessage(), request);
+    }
+
+    /**
+     * Handles two transactions updating the same row at the same time: the {@code @Version} check makes the second
+     * one fail instead of silently overwriting the first.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(OptimisticLockingFailureException ex,
+                                                              HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT,
+                "The resource was modified by another request at the same time; fetch it again and retry.", request);
     }
 
     /**

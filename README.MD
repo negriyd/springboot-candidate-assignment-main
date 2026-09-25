@@ -126,6 +126,10 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
 - **One owner, many pets.** `Pet` has `@ManyToOne owner` (foreign key `pet.owner_id`) and `Owner` has
   `@OneToMany pets`. This replaces the original `Owner.petId`, which allowed only one pet per owner.
 - The pet JSON still exposes `ownerId`, read from the lazy association without loading the owner.
+- `Pet.setOwner(...)` keeps both sides of the relationship in sync. `Owner.getPets()` is read-only, so the two sides
+  cannot drift apart.
+- The database enforces the same rules as the API: required columns are `NOT NULL`, text columns have length limits,
+  and `species` is stored by name rather than by ordinal.
 - An owner's pets are not embedded in the owner JSON. They come from the paged endpoint `GET /owners/{id}/pets`,
   so a response stays small however many pets an owner has.
 
@@ -151,6 +155,11 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
   - Owners (`GET /owners`): `nameFirst`, `nameLast` and `address` (substring match, case-insensitive).
   - Filters are built with JPA Specifications. `%` and `_` in the input match literally, not as wildcards. Invalid
     values (unknown species, negative age, `minAge > maxAge`) return 400.
+- **Optimistic locking:** every entity has a `@Version`. Responses for a single resource carry it as an `ETag`
+  header. A client can send that value back in `If-Match` on `PUT`, `PATCH` or `DELETE`; if someone else changed the
+  resource in the meantime, the request fails with `412 Precondition Failed` instead of silently overwriting that
+  change. `If-Match` is optional, so clients that don't use it keep working. Two transactions updating the same row at
+  the same moment are rejected with `409 Conflict`.
 - **Deleting an owner who still has pets returns `409 Conflict`,** so pets are never changed as a hidden side effect.
   Reassign or delete the pets first.
 
@@ -172,6 +181,7 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
   - `READER` can only read;
   - `WRITER` can only create, update and delete;
   - `ADMIN` can do both.
+- The H2 console (`/h2-console`) is available to `ADMIN` only, because it can run any SQL against the database.
 - Access rules are declared on each endpoint with `@CanRead` / `@CanWrite`. `EndpointSecurityCoverageTests` fails if
   any endpoint is missing an authorization annotation.
 

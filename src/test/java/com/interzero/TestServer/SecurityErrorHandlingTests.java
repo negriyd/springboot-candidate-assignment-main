@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -45,5 +46,33 @@ class SecurityErrorHandlingTests {
         mockMvc.perform(get("/").with(httpBasic("admin", "admin-password")))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Hello, World!"));
+    }
+
+    @Test
+    void h2ConsoleRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/h2-console/"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void h2ConsoleIsForbiddenForReaderAndWriter() throws Exception {
+        mockMvc.perform(get("/h2-console/").with(httpBasic("reader", "reader-password")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/h2-console/").with(httpBasic("writer", "writer-password")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void h2ConsoleIsAllowedForAdmin() throws Exception {
+        // MockMvc runs only the DispatcherServlet, not the H2 console servlet, so the request itself ends in 404.
+        // What matters here is that security lets it through.
+        mockMvc.perform(get("/h2-console/").with(httpBasic("admin", "admin-password")))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotIn(401, 403));
+    }
+
+    @Test
+    void framesAreAllowedFromSameOriginOnly() throws Exception {
+        mockMvc.perform(get("/").with(httpBasic("admin", "admin-password")))
+                .andExpect(header().string("X-Frame-Options", "SAMEORIGIN"));
     }
 }

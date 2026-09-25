@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -39,6 +41,10 @@ import java.util.Map;
  * Handles HTTP concerns only (mapping, status codes, headers); business logic lives in {@link PetService}.
  * Errors such as a missing pet are thrown by the service and turned into responses by
  * {@link com.interzero.TestServer.error.GlobalExceptionHandler}.
+ * <p>
+ * Single-resource responses carry an {@code ETag}. Sending it back in {@code If-Match} on {@code PUT},
+ * {@code PATCH} or {@code DELETE} makes the change fail with 412 if someone else changed the resource first;
+ * see {@link ETags}.
  */
 @Slf4j
 @RestController
@@ -91,9 +97,9 @@ public class PetController {
      */
     @GetMapping("/{id}")
     @CanRead
-    public Pet getPet(@PathVariable Long id) {
+    public ResponseEntity<Pet> getPet(@PathVariable Long id) {
         log.info("PetController.getPet({}) called", id);
-        return petService.get(id);
+        return withETag(petService.get(id));
     }
 
     /**
@@ -112,22 +118,25 @@ public class PetController {
                 .path("/{id}")
                 .buildAndExpand(created.getId())
                 .toUri();
-        return ResponseEntity.created(location).body(created);
+        return ResponseEntity.created(location).eTag(ETags.of(created.getVersion())).body(created);
     }
 
     /**
      * Replaces all fields of an existing pet.
      *
-     * @param id      The ID of the pet.
-     * @param request The new state of the pet.
+     * @param id       The ID of the pet.
+     * @param ifMatch  Optional {@code ETag} the client last read; if it no longer matches, 412.
+     * @param request  The new state of the pet.
      * @return The updated pet, 404 if no pet with this ID exists,
      * or 400 if the request refers to an owner that does not exist.
      */
     @PutMapping("/{id}")
     @CanWrite
-    public Pet updatePet(@PathVariable Long id, @Valid @RequestBody PetRequest request) {
+    public ResponseEntity<Pet> updatePet(@PathVariable Long id,
+                                        @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
+                                        @Valid @RequestBody PetRequest request) {
         log.info("PetController.updatePet({}) called", id);
-        return petService.update(id, request);
+        return withETag(petService.update(id, request, ETags.parseIfMatch(ifMatch)));
     }
 
     /**
@@ -136,28 +145,37 @@ public class PetController {
      * <p>
      * Accepts {@code application/json} and {@code application/merge-patch+json} (RFC 7396), whose semantics match.
      *
-     * @param id      The ID of the pet.
-     * @param request The fields to change.
+     * @param id       The ID of the pet.
+     * @param ifMatch  Optional {@code ETag} the client last read; if it no longer matches, 412.
+     * @param request  The fields to change.
      * @return The updated pet, 404 if no pet with this ID exists,
      * or 400 if the request refers to an owner that does not exist.
      */
     @PatchMapping(path = "/{id}", consumes = {MediaType.APPLICATION_JSON_VALUE, "application/merge-patch+json"})
     @CanWrite
-    public Pet patchPet(@PathVariable Long id, @Valid @RequestBody PetPatchRequest request) {
+    public ResponseEntity<Pet> patchPet(@PathVariable Long id,
+                                       @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
+                                       @Valid @RequestBody PetPatchRequest request) {
         log.info("PetController.patchPet({}) called", id);
-        return petService.patch(id, request);
+        return withETag(petService.patch(id, request, ETags.parseIfMatch(ifMatch)));
     }
 
     /**
      * Deletes a pet.
      *
-     * @param id The ID of the pet.
+     * @param id       The ID of the pet.
+     * @param ifMatch  Optional {@code ETag} the client last read; if it no longer matches, 412.
      */
     @DeleteMapping("/{id}")
     @CanWrite
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deletePet(@PathVariable Long id) {
+    public void deletePet(@PathVariable Long id,
+                          @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
         log.info("PetController.deletePet({}) called", id);
-        petService.delete(id);
+        petService.delete(id, ETags.parseIfMatch(ifMatch));
+    }
+
+    private static ResponseEntity<Pet> withETag(Pet pet) {
+        return ResponseEntity.ok().eTag(ETags.of(pet.getVersion())).body(pet);
     }
 }

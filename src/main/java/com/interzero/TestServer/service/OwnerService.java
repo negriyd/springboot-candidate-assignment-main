@@ -6,6 +6,7 @@ import com.interzero.TestServer.dto.OwnerRequest;
 import com.interzero.TestServer.entity.Owner;
 import com.interzero.TestServer.error.ResourceConflictException;
 import com.interzero.TestServer.error.ResourceNotFoundException;
+import com.interzero.TestServer.error.VersionMismatchException;
 import com.interzero.TestServer.repository.OwnerRepository;
 import com.interzero.TestServer.repository.PetRepository;
 import org.springframework.data.domain.Page;
@@ -62,6 +63,15 @@ public class OwnerService {
     }
 
     /**
+     * Gets a owner to change, checking that it still has the version the client expects.
+     */
+    private Owner getForUpdate(Long id, Long expectedVersion) {
+        Owner owner = get(id);
+        Versions.check("Owner", id, owner.getVersion(), expectedVersion);
+        return owner;
+    }
+
+    /**
      * Creates a new owner.
      *
      * @param request The owner to create.
@@ -74,38 +84,47 @@ public class OwnerService {
     /**
      * Replaces all fields of an existing owner. The owner's pets are not affected.
      *
-     * @param id      The ID of the owner.
-     * @param request The new state of the owner.
+     * @param id              The ID of the owner.
+     * @param request         The new state of the owner.
+     * @param expectedVersion The version the client last read ({@code If-Match}), or {@code null} to skip
+     *                        the check.
      * @return The updated owner.
      * @throws ResourceNotFoundException If no owner with this ID exists.
+     * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
      */
-    public Owner update(Long id, OwnerRequest request) {
-        return ownerRepository.save(request.applyTo(get(id)));
+    public Owner update(Long id, OwnerRequest request, Long expectedVersion) {
+        return ownerRepository.save(request.applyTo(getForUpdate(id, expectedVersion)));
     }
 
     /**
      * Partially updates an existing owner. See {@link OwnerPatchRequest} for how missing and {@code null} fields are
      * treated. The owner's pets are not affected.
      *
-     * @param id      The ID of the owner.
-     * @param request The fields to change.
+     * @param id              The ID of the owner.
+     * @param request         The fields to change.
+     * @param expectedVersion The version the client last read ({@code If-Match}), or {@code null} to skip
+     *                        the check.
      * @return The updated owner.
      * @throws ResourceNotFoundException If no owner with this ID exists.
+     * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
      */
-    public Owner patch(Long id, OwnerPatchRequest request) {
-        return ownerRepository.save(request.applyTo(get(id)));
+    public Owner patch(Long id, OwnerPatchRequest request, Long expectedVersion) {
+        return ownerRepository.save(request.applyTo(getForUpdate(id, expectedVersion)));
     }
 
     /**
      * Deletes an owner. An owner who still has pets cannot be deleted: the pets must be reassigned (or deleted)
      * first, so that no pet is changed as a side effect.
      *
-     * @param id The ID of the owner.
+     * @param id              The ID of the owner.
+     * @param expectedVersion The version the client last read ({@code If-Match}), or {@code null} to skip
+     *                        the check.
      * @throws ResourceNotFoundException If no owner with this ID exists.
      * @throws ResourceConflictException If the owner still has pets.
+     * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
      */
-    public void delete(Long id) {
-        Owner owner = get(id);
+    public void delete(Long id, Long expectedVersion) {
+        Owner owner = getForUpdate(id, expectedVersion);
         if (petRepository.existsByOwner_Id(id)) {
             throw new ResourceConflictException(
                     "Owner %d still has pets; reassign or delete them first.".formatted(id));
