@@ -117,15 +117,20 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
 - **Layers: controller → service → repository.** Controllers handle HTTP only: mapping, status codes, `Location`
   headers, validation and paging parameters. Services (`PetService`, `OwnerService`) hold the business rules and
   transactions. `ControllerLayeringTests` fails if a controller uses a repository directly.
-- **Request DTOs** (`PetRequest`, `PetPatchRequest`, `OwnerRequest`, `OwnerPatchRequest`) separate the API input from
-  the entities. They have no `id` field, so a client cannot overwrite another record by sending one. Responses
-  return the entities directly to keep the code small; relations are hidden with `@JsonIgnore`.
+- **DTOs in both directions:** the API never exposes JPA entities, so the JSON stays independent of the database model.
+  `ControllerLayeringTests` enforces this.
+  - Requests use `PetRequest`, `PetPatchRequest`, `OwnerRequest` and `OwnerPatchRequest`. They have no `id` field,
+    so a client cannot overwrite another record by sending one.
+  - Responses use `PetResponse` and `OwnerResponse`. Services map entities to responses inside the transaction, so
+    lazy relations are loaded before the session closes (`spring.jpa.open-in-view=false`).
 
 ### Data Model
 
 - **One owner, many pets.** `Pet` has `@ManyToOne owner` (foreign key `pet.owner_id`) and `Owner` has
   `@OneToMany pets`. This replaces the original `Owner.petId`, which allowed only one pet per owner.
-- The pet JSON still exposes `ownerId`, read from the lazy association without loading the owner.
+- The pet JSON has `ownerId` (the same field as in requests) and a small `owner` summary (`id`, `nameFirst`,
+  `nameLast`), so clients can show who owns a pet without a second request. Owners are loaded in the same query as the
+  pets (`@EntityGraph`), so a page of pets does not trigger one extra query per pet (N+1).
 - `Pet.setOwner(...)` keeps both sides of the relationship in sync. `Owner.getPets()` is read-only, so the two sides
   cannot drift apart.
 - The database enforces the same rules as the API: required columns are `NOT NULL`, text columns have length limits,
@@ -194,7 +199,5 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
 
 ### Trade-offs and Possible Improvements
 
-- Responses return entities rather than dedicated response DTOs. Response DTOs would fully decouple the API from
-  the database model.
 - The in-memory users and H2 database are kept for simplicity. A real deployment would use a persistent database,
   a proper user store, and schema migrations (e.g. Flyway) instead of `ddl-auto=update`.

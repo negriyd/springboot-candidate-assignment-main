@@ -3,6 +3,7 @@ package com.interzero.TestServer.service;
 import com.interzero.TestServer.dto.OwnerFilter;
 import com.interzero.TestServer.dto.OwnerPatchRequest;
 import com.interzero.TestServer.dto.OwnerRequest;
+import com.interzero.TestServer.dto.OwnerResponse;
 import com.interzero.TestServer.entity.Owner;
 import com.interzero.TestServer.error.ResourceConflictException;
 import com.interzero.TestServer.error.ResourceNotFoundException;
@@ -45,8 +46,8 @@ public class OwnerService {
      * @return The requested page of owners.
      */
     @Transactional(readOnly = true)
-    public Page<Owner> findAll(OwnerFilter filter, Pageable pageable) {
-        return ownerRepository.findAll(Specifications.owners(filter), pageable);
+    public Page<OwnerResponse> findAll(OwnerFilter filter, Pageable pageable) {
+        return ownerRepository.findAll(Specifications.owners(filter), pageable).map(OwnerResponse::from);
     }
 
     /**
@@ -57,7 +58,11 @@ public class OwnerService {
      * @throws ResourceNotFoundException If no owner with this ID exists.
      */
     @Transactional(readOnly = true)
-    public Owner get(Long id) {
+    public OwnerResponse get(Long id) {
+        return OwnerResponse.from(find(id));
+    }
+
+    private Owner find(Long id) {
         return ownerRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Owner %d not found.".formatted(id)));
     }
@@ -66,7 +71,7 @@ public class OwnerService {
      * Gets a owner to change, checking that it still has the version the client expects.
      */
     private Owner getForUpdate(Long id, Long expectedVersion) {
-        Owner owner = get(id);
+        Owner owner = find(id);
         Versions.check("Owner", id, owner.getVersion(), expectedVersion);
         return owner;
     }
@@ -77,8 +82,8 @@ public class OwnerService {
      * @param request The owner to create.
      * @return The created owner, with its generated ID.
      */
-    public Owner create(OwnerRequest request) {
-        return ownerRepository.save(request.applyTo(new Owner()));
+    public OwnerResponse create(OwnerRequest request) {
+        return OwnerResponse.from(ownerRepository.save(request.applyTo(new Owner())));
     }
 
     /**
@@ -92,8 +97,8 @@ public class OwnerService {
      * @throws ResourceNotFoundException If no owner with this ID exists.
      * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
      */
-    public Owner update(Long id, OwnerRequest request, Long expectedVersion) {
-        return ownerRepository.save(request.applyTo(getForUpdate(id, expectedVersion)));
+    public OwnerResponse update(Long id, OwnerRequest request, Long expectedVersion) {
+        return saveAndMap(request.applyTo(getForUpdate(id, expectedVersion)));
     }
 
     /**
@@ -108,8 +113,8 @@ public class OwnerService {
      * @throws ResourceNotFoundException If no owner with this ID exists.
      * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
      */
-    public Owner patch(Long id, OwnerPatchRequest request, Long expectedVersion) {
-        return ownerRepository.save(request.applyTo(getForUpdate(id, expectedVersion)));
+    public OwnerResponse patch(Long id, OwnerPatchRequest request, Long expectedVersion) {
+        return saveAndMap(request.applyTo(getForUpdate(id, expectedVersion)));
     }
 
     /**
@@ -130,5 +135,13 @@ public class OwnerService {
                     "Owner %d still has pets; reassign or delete them first.".formatted(id));
         }
         ownerRepository.delete(owner);
+    }
+
+    /**
+     * Saves a changed owner and maps it. Flushes first, so the response carries the incremented version (the
+     * {@code ETag}) rather than the version from before the update.
+     */
+    private OwnerResponse saveAndMap(Owner owner) {
+        return OwnerResponse.from(ownerRepository.saveAndFlush(owner));
     }
 }

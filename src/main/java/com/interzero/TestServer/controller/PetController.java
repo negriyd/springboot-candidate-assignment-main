@@ -3,10 +3,10 @@ package com.interzero.TestServer.controller;
 import com.interzero.TestServer.configuration.CanRead;
 import com.interzero.TestServer.configuration.CanWrite;
 import com.interzero.TestServer.dto.PageResponse;
+import com.interzero.TestServer.dto.PetResponse;
 import com.interzero.TestServer.dto.PetFilter;
 import com.interzero.TestServer.dto.PetPatchRequest;
 import com.interzero.TestServer.dto.PetRequest;
-import com.interzero.TestServer.entity.Pet;
 import com.interzero.TestServer.service.PetService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +36,8 @@ import java.net.URI;
 import java.util.Map;
 
 /**
- * The REST controller for all things related to {@link Pet}s.
+ * The REST controller for all things related to {@link com.interzero.TestServer.entity.Pet}s.
+ * Returns {@link PetResponse}s, never entities.
  * <p>
  * Handles HTTP concerns only (mapping, status codes, headers); business logic lives in {@link PetService}.
  * Errors such as a missing pet are thrown by the service and turned into responses by
@@ -80,7 +81,7 @@ public class PetController {
      */
     @GetMapping
     @CanRead
-    public PageResponse<Pet> getPets(@Valid @ParameterObject PetFilter filter,
+    public PageResponse<PetResponse> getPets(@Valid @ParameterObject PetFilter filter,
                                      @RequestParam(required = false) Long ownerId,
                                      @RequestParam(required = false) Boolean hasOwner,
                                      @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
@@ -97,7 +98,7 @@ public class PetController {
      */
     @GetMapping("/{id}")
     @CanRead
-    public ResponseEntity<Pet> getPet(@PathVariable Long id) {
+    public ResponseEntity<PetResponse> getPet(@PathVariable Long id) {
         log.info("PetController.getPet({}) called", id);
         return withETag(petService.get(id));
     }
@@ -111,14 +112,14 @@ public class PetController {
      */
     @PostMapping
     @CanWrite
-    public ResponseEntity<Pet> createPet(@Valid @RequestBody PetRequest request) {
+    public ResponseEntity<PetResponse> createPet(@Valid @RequestBody PetRequest request) {
         log.info("PetController.createPet() called");
-        Pet created = petService.create(request);
+        PetResponse created = petService.create(request);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
-                .buildAndExpand(created.getId())
+                .buildAndExpand(created.id())
                 .toUri();
-        return ResponseEntity.created(location).eTag(ETags.of(created.getVersion())).body(created);
+        return ResponseEntity.created(location).eTag(ETags.of(created.version())).body(created);
     }
 
     /**
@@ -132,7 +133,7 @@ public class PetController {
      */
     @PutMapping("/{id}")
     @CanWrite
-    public ResponseEntity<Pet> updatePet(@PathVariable Long id,
+    public ResponseEntity<PetResponse> updatePet(@PathVariable Long id,
                                         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
                                         @Valid @RequestBody PetRequest request) {
         log.info("PetController.updatePet({}) called", id);
@@ -153,7 +154,7 @@ public class PetController {
      */
     @PatchMapping(path = "/{id}", consumes = {MediaType.APPLICATION_JSON_VALUE, "application/merge-patch+json"})
     @CanWrite
-    public ResponseEntity<Pet> patchPet(@PathVariable Long id,
+    public ResponseEntity<PetResponse> patchPet(@PathVariable Long id,
                                        @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
                                        @Valid @RequestBody PetPatchRequest request) {
         log.info("PetController.patchPet({}) called", id);
@@ -175,7 +176,7 @@ public class PetController {
         petService.delete(id, ETags.parseIfMatch(ifMatch));
     }
 
-    private static ResponseEntity<Pet> withETag(Pet pet) {
-        return ResponseEntity.ok().eTag(ETags.of(pet.getVersion())).body(pet);
+    private static ResponseEntity<PetResponse> withETag(PetResponse pet) {
+        return ResponseEntity.ok().eTag(ETags.of(pet.version())).body(pet);
     }
 }

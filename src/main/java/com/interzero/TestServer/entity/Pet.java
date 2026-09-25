@@ -1,7 +1,5 @@
 package com.interzero.TestServer.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.interzero.TestServer.enums.Species;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -27,7 +25,6 @@ public class Pet {
     /**
      * Incremented on every update. Used for optimistic locking and exposed to clients as the {@code ETag} header.
      */
-    @JsonIgnore
     @Version
     @Setter(AccessLevel.NONE)
     private Long version;
@@ -54,9 +51,7 @@ public class Pet {
 
     /**
      * The owner of this pet, or {@code null} if the pet has no owner.
-     * Not serialized; clients see only {@link #getOwnerId()}.
      */
-    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id")
     @Setter(AccessLevel.NONE)
@@ -67,7 +62,6 @@ public class Pet {
      *
      * @return The owner ID, or {@code null} if the pet has no owner.
      */
-    @JsonProperty("ownerId")
     public Long getOwnerId() {
         return owner != null ? owner.getId() : null;
     }

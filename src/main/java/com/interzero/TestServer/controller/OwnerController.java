@@ -5,10 +5,10 @@ import com.interzero.TestServer.configuration.CanWrite;
 import com.interzero.TestServer.dto.OwnerFilter;
 import com.interzero.TestServer.dto.OwnerPatchRequest;
 import com.interzero.TestServer.dto.OwnerRequest;
+import com.interzero.TestServer.dto.OwnerResponse;
 import com.interzero.TestServer.dto.PageResponse;
 import com.interzero.TestServer.dto.PetFilter;
-import com.interzero.TestServer.entity.Owner;
-import com.interzero.TestServer.entity.Pet;
+import com.interzero.TestServer.dto.PetResponse;
 import com.interzero.TestServer.service.OwnerService;
 import com.interzero.TestServer.service.PetService;
 import jakarta.validation.Valid;
@@ -38,7 +38,8 @@ import java.net.URI;
 import java.util.Map;
 
 /**
- * The REST controller for all things related to {@link Owner}s.
+ * The REST controller for all things related to {@link com.interzero.TestServer.entity.Owner}s.
+ * Returns {@link OwnerResponse}s, never entities.
  * <p>
  * Handles HTTP concerns only (mapping, status codes, headers); business logic lives in {@link OwnerService} and,
  * for an owner's pets, {@link PetService}. Errors are thrown by the services and turned into responses by
@@ -85,7 +86,7 @@ public class OwnerController {
      */
     @GetMapping
     @CanRead
-    public PageResponse<Owner> getOwners(@Valid @ParameterObject OwnerFilter filter,
+    public PageResponse<OwnerResponse> getOwners(@Valid @ParameterObject OwnerFilter filter,
                                          @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
         log.info("OwnerController.getOwners({}, {}) called", filter, pageable);
         return PageResponse.of(ownerService.findAll(filter, Paging.mapSort(pageable, SORTABLE_FIELDS)));
@@ -99,7 +100,7 @@ public class OwnerController {
      */
     @GetMapping("/{id}")
     @CanRead
-    public ResponseEntity<Owner> getOwner(@PathVariable Long id) {
+    public ResponseEntity<OwnerResponse> getOwner(@PathVariable Long id) {
         log.info("OwnerController.getOwner({}) called", id);
         return withETag(ownerService.get(id));
     }
@@ -116,7 +117,7 @@ public class OwnerController {
      */
     @GetMapping("/{id}/pets")
     @CanRead
-    public PageResponse<Pet> getOwnerPets(@PathVariable Long id,
+    public PageResponse<PetResponse> getOwnerPets(@PathVariable Long id,
                                           @Valid @ParameterObject PetFilter filter,
                                           @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
         log.info("OwnerController.getOwnerPets({}, {}, {}) called", id, filter, pageable);
@@ -131,14 +132,14 @@ public class OwnerController {
      */
     @PostMapping
     @CanWrite
-    public ResponseEntity<Owner> createOwner(@Valid @RequestBody OwnerRequest request) {
+    public ResponseEntity<OwnerResponse> createOwner(@Valid @RequestBody OwnerRequest request) {
         log.info("OwnerController.createOwner() called");
-        Owner created = ownerService.create(request);
+        OwnerResponse created = ownerService.create(request);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
-                .buildAndExpand(created.getId())
+                .buildAndExpand(created.id())
                 .toUri();
-        return ResponseEntity.created(location).eTag(ETags.of(created.getVersion())).body(created);
+        return ResponseEntity.created(location).eTag(ETags.of(created.version())).body(created);
     }
 
     /**
@@ -151,7 +152,7 @@ public class OwnerController {
      */
     @PutMapping("/{id}")
     @CanWrite
-    public ResponseEntity<Owner> updateOwner(@PathVariable Long id,
+    public ResponseEntity<OwnerResponse> updateOwner(@PathVariable Long id,
                                         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
                                         @Valid @RequestBody OwnerRequest request) {
         log.info("OwnerController.updateOwner({}) called", id);
@@ -172,7 +173,7 @@ public class OwnerController {
      */
     @PatchMapping(path = "/{id}", consumes = {MediaType.APPLICATION_JSON_VALUE, "application/merge-patch+json"})
     @CanWrite
-    public ResponseEntity<Owner> patchOwner(@PathVariable Long id,
+    public ResponseEntity<OwnerResponse> patchOwner(@PathVariable Long id,
                                        @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
                                        @Valid @RequestBody OwnerPatchRequest request) {
         log.info("OwnerController.patchOwner({}) called", id);
@@ -194,7 +195,7 @@ public class OwnerController {
         ownerService.delete(id, ETags.parseIfMatch(ifMatch));
     }
 
-    private static ResponseEntity<Owner> withETag(Owner owner) {
-        return ResponseEntity.ok().eTag(ETags.of(owner.getVersion())).body(owner);
+    private static ResponseEntity<OwnerResponse> withETag(OwnerResponse owner) {
+        return ResponseEntity.ok().eTag(ETags.of(owner.version())).body(owner);
     }
 }

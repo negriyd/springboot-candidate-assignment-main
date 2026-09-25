@@ -1,6 +1,5 @@
 package com.interzero.TestServer.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -29,7 +28,6 @@ public class Owner {
     /**
      * Incremented on every update. Used for optimistic locking and exposed to clients as the {@code ETag} header.
      */
-    @JsonIgnore
     @Version
     @Setter(AccessLevel.NONE)
     private Long version;
@@ -53,10 +51,9 @@ public class Owner {
     private String address;
 
     /**
-     * The pets that this owner owns. Not serialized; use {@code GET /owners/{id}/pets}, which is paged.
+     * The pets that this owner owns.
      * Changed only through {@link Pet#setOwner(Owner)}, which keeps both sides of the relationship in sync.
      */
-    @JsonIgnore
     @OneToMany(mappedBy = "owner")
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)

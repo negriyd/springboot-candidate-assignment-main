@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -144,6 +145,38 @@ class PetControllerTests {
                 .andExpect(jsonPath("$.id").value(existing.getId()))
                 .andExpect(jsonPath("$.name").value("Felix"))
                 .andExpect(jsonPath("$.species").value("cat"));
+    }
+
+    @Test
+    void petResponseIncludesOwnerSummary() throws Exception {
+        existing.setOwner(owner);
+        petRepository.save(existing);
+
+        mockMvc.perform(asAdmin(get("/pets/{id}", existing.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ownerId").value(owner.getId()))
+                .andExpect(jsonPath("$.owner.id").value(owner.getId()))
+                .andExpect(jsonPath("$.owner.nameFirst").value("Jane"))
+                .andExpect(jsonPath("$.owner.nameLast").value("Doe"))
+                .andExpect(jsonPath("$.owner.address").doesNotExist())
+                .andExpect(jsonPath("$.version").doesNotExist());
+    }
+
+    @Test
+    void petListIncludesOwnerSummaries() throws Exception {
+        existing.setOwner(owner);
+        petRepository.save(existing);
+
+        mockMvc.perform(asAdmin(get("/pets").param("ownerId", owner.getId().toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].owner.nameLast").value("Doe"));
+    }
+
+    @Test
+    void petWithoutOwnerHasNullOwner() throws Exception {
+        mockMvc.perform(asAdmin(get("/pets/{id}", existing.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.owner").value(nullValue()));
     }
 
     @Test

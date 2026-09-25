@@ -3,6 +3,7 @@ package com.interzero.TestServer.service;
 import com.interzero.TestServer.dto.PetFilter;
 import com.interzero.TestServer.dto.PetPatchRequest;
 import com.interzero.TestServer.dto.PetRequest;
+import com.interzero.TestServer.dto.PetResponse;
 import com.interzero.TestServer.entity.Owner;
 import com.interzero.TestServer.entity.Pet;
 import com.interzero.TestServer.error.InvalidReferenceException;
@@ -48,8 +49,8 @@ public class PetService {
      * @return The requested page of pets.
      */
     @Transactional(readOnly = true)
-    public Page<Pet> findAll(PetFilter filter, Long ownerId, Boolean hasOwner, Pageable pageable) {
-        return petRepository.findAll(Specifications.pets(filter, ownerId, hasOwner), pageable);
+    public Page<PetResponse> findAll(PetFilter filter, Long ownerId, Boolean hasOwner, Pageable pageable) {
+        return petRepository.findAll(Specifications.pets(filter, ownerId, hasOwner), pageable).map(PetResponse::from);
     }
 
     /**
@@ -62,7 +63,7 @@ public class PetService {
      * @throws ResourceNotFoundException If no owner with this ID exists.
      */
     @Transactional(readOnly = true)
-    public Page<Pet> findByOwner(Long ownerId, PetFilter filter, Pageable pageable) {
+    public Page<PetResponse> findByOwner(Long ownerId, PetFilter filter, Pageable pageable) {
         if (!ownerRepository.existsById(ownerId)) {
             throw new ResourceNotFoundException("Owner %d not found.".formatted(ownerId));
         }
@@ -77,7 +78,11 @@ public class PetService {
      * @throws ResourceNotFoundException If no pet with this ID exists.
      */
     @Transactional(readOnly = true)
-    public Pet get(Long id) {
+    public PetResponse get(Long id) {
+        return PetResponse.from(find(id));
+    }
+
+    private Pet find(Long id) {
         return petRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Pet %d not found.".formatted(id)));
     }
@@ -86,7 +91,7 @@ public class PetService {
      * Gets a pet to change, checking that it still has the version the client expects.
      */
     private Pet getForUpdate(Long id, Long expectedVersion) {
-        Pet pet = get(id);
+        Pet pet = find(id);
         Versions.check("Pet", id, pet.getVersion(), expectedVersion);
         return pet;
     }
@@ -98,8 +103,8 @@ public class PetService {
      * @return The created pet, with its generated ID.
      * @throws InvalidReferenceException If the request refers to an owner that does not exist.
      */
-    public Pet create(PetRequest request) {
-        return petRepository.save(request.applyTo(new Pet(), this::findOwnerForPet));
+    public PetResponse create(PetRequest request) {
+        return PetResponse.from(petRepository.save(request.applyTo(new Pet(), this::findOwnerForPet)));
     }
 
     /**
@@ -114,8 +119,8 @@ public class PetService {
      * @throws InvalidReferenceException If the request refers to an owner that does not exist.
      * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
      */
-    public Pet update(Long id, PetRequest request, Long expectedVersion) {
-        return petRepository.save(request.applyTo(getForUpdate(id, expectedVersion), this::findOwnerForPet));
+    public PetResponse update(Long id, PetRequest request, Long expectedVersion) {
+        return saveAndMap(request.applyTo(getForUpdate(id, expectedVersion), this::findOwnerForPet));
     }
 
     /**
@@ -131,8 +136,8 @@ public class PetService {
      * @throws InvalidReferenceException If the request refers to an owner that does not exist.
      * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
      */
-    public Pet patch(Long id, PetPatchRequest request, Long expectedVersion) {
-        return petRepository.save(request.applyTo(getForUpdate(id, expectedVersion), this::findOwnerForPet));
+    public PetResponse patch(Long id, PetPatchRequest request, Long expectedVersion) {
+        return saveAndMap(request.applyTo(getForUpdate(id, expectedVersion), this::findOwnerForPet));
     }
 
     /**
@@ -146,6 +151,14 @@ public class PetService {
      */
     public void delete(Long id, Long expectedVersion) {
         petRepository.delete(getForUpdate(id, expectedVersion));
+    }
+
+    /**
+     * Saves a changed pet and maps it. Flushes first, so the response carries the incremented version (the
+     * {@code ETag}) rather than the version from before the update.
+     */
+    private PetResponse saveAndMap(Pet pet) {
+        return PetResponse.from(petRepository.saveAndFlush(pet));
     }
 
     private Owner findOwnerForPet(Long ownerId) {

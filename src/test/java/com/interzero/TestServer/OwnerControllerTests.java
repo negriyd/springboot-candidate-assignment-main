@@ -104,7 +104,8 @@ class OwnerControllerTests {
                 .andExpect(jsonPath("$.nameFirst").value("Jane"))
                 .andExpect(jsonPath("$.nameLast").value("Roe"))
                 .andExpect(jsonPath("$.address").value("5 Side Street"))
-                .andExpect(jsonPath("$.pets").doesNotExist());
+                .andExpect(jsonPath("$.pets").doesNotExist())
+                .andExpect(jsonPath("$.version").doesNotExist());
     }
 
     @Test
