@@ -15,7 +15,6 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.time.Instant;
 
 /**
  * Writes security errors as JSON {@link ErrorResponse}s instead of Spring Security's default empty responses.
@@ -62,8 +61,7 @@ public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDen
 
     private void write(HttpServletRequest request, HttpServletResponse response,
                        HttpStatus status, String message) throws IOException {
-        ErrorResponse body = new ErrorResponse(
-                Instant.now(), status.value(), status.getReasonPhrase(), message, request.getRequestURI());
+        ErrorResponse body = ErrorResponse.of(status, message, request.getRequestURI());
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getOutputStream(), body);
