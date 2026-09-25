@@ -1,4 +1,4 @@
-package com.interzero.TestServer;
+package com.interzero.TestServer.controller;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;

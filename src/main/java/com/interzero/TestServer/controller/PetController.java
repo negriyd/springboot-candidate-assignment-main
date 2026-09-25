@@ -1,4 +1,4 @@
-package com.interzero.TestServer;
+package com.interzero.TestServer.controller;
 
 import com.interzero.TestServer.entity.Pet;
 import com.interzero.TestServer.repository.PetRepository;
