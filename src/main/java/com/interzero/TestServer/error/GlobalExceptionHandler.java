@@ -3,6 +3,7 @@ package com.interzero.TestServer.error;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -85,6 +86,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMissingParameter(MissingServletRequestParameterException ex,
                                                                 HttpServletRequest request) {
         String message = "Required parameter '%s' is missing.".formatted(ex.getParameterName());
+        return build(HttpStatus.BAD_REQUEST, message, request);
+    }
+
+    /**
+     * Handles sorting by a property that does not exist, e.g. {@code GET /pets?sort=unknown}.
+     */
+    @ExceptionHandler(PropertyReferenceException.class)
+    public ResponseEntity<ErrorResponse> handleUnknownProperty(PropertyReferenceException ex,
+                                                               HttpServletRequest request) {
+        String message = "Unknown property '%s'.".formatted(ex.getPropertyName());
         return build(HttpStatus.BAD_REQUEST, message, request);
     }
 

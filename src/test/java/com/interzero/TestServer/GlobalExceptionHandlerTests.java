@@ -151,7 +151,7 @@ class GlobalExceptionHandlerTests {
 
     @Test
     void unsupportedMethodReturns405WithAllowHeader() throws Exception {
-        mockMvc.perform(asAdmin(put("/pets")))
+        mockMvc.perform(asAdmin(put("/test-errors/param")))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(header().string("Allow", "GET"))
                 .andExpect(jsonPath("$.message").value("Method 'PUT' is not supported for this endpoint."));
