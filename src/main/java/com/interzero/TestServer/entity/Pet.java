@@ -5,11 +5,15 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.envers.Audited;
 
 /**
  * The pet entity. This is a simple entity that has a name, species, and age.
  * A pet belongs to at most one {@link Owner}; an owner can have many pets.
+ * <p>
+ * Audited: every change is also stored in {@code pet_aud} (Hibernate Envers), see {@code GET /pets/{id}/history}.
  */
+@Audited
 @Getter
 @Setter
 @Entity

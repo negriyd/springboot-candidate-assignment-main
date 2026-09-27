@@ -1,5 +1,6 @@
 package com.interzero.TestServer.service;
 
+import com.interzero.TestServer.dto.HistoryEntry;
 import com.interzero.TestServer.dto.OwnerFilter;
 import com.interzero.TestServer.dto.OwnerPatchRequest;
 import com.interzero.TestServer.dto.OwnerRequest;
@@ -10,6 +11,8 @@ import com.interzero.TestServer.error.ResourceNotFoundException;
 import com.interzero.TestServer.error.VersionMismatchException;
 import com.interzero.TestServer.repository.OwnerRepository;
 import com.interzero.TestServer.repository.PetRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.lang.NonNull;
@@ -32,6 +35,12 @@ public class OwnerService {
      * Used to check for pets before deleting an owner.
      */
     private final PetRepository petRepository;
+
+    /**
+     * Used to read the change history from the Envers tables.
+     */
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public OwnerService(@NonNull OwnerRepository ownerRepository, @NonNull PetRepository petRepository) {
         this.ownerRepository = ownerRepository;
@@ -60,6 +69,25 @@ public class OwnerService {
     @Transactional(readOnly = true)
     public OwnerResponse get(Long id) {
         return OwnerResponse.from(find(id));
+    }
+
+    /**
+     * Gets one page of the change history of an owner, newest change first. Works for deleted
+     * owners too.
+     *
+     * @param id       The ID of the owner.
+     * @param pageable The page to return; any sort is ignored.
+     * @return The requested page of history entries.
+     * @throws ResourceNotFoundException If no owner with this ID has ever existed.
+     */
+    @Transactional(readOnly = true)
+    public Page<HistoryEntry<OwnerResponse>> history(Long id, Pageable pageable) {
+        Page<HistoryEntry<OwnerResponse>> history =
+                AuditHistory.load(entityManager, Owner.class, id, pageable, Owner::getVersion, OwnerResponse::from);
+        if (history.getTotalElements() == 0) {
+            throw new ResourceNotFoundException("Owner %d not found.".formatted(id));
+        }
+        return history;
     }
 
     private Owner find(Long id) {

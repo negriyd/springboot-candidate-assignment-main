@@ -38,6 +38,14 @@ spring:
     show-sql: false
     # Close the persistence context when the service transaction ends, not at the end of the HTTP request
     open-in-view: false
+    properties:
+      org:
+        hibernate:
+          envers:
+            # Keep the last state of a deleted entity in its history, not only the fact that it was deleted
+            store_data_at_delete: true
+            # Also record the @Version field, so each history entry shows the version (the ETag) after that change
+            do_not_audit_optimistic_locking_field: false
 
   # Paging: cap the page size clients can request
   data:

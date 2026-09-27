@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.envers.Audited;
+import org.hibernate.envers.NotAudited;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,7 +14,11 @@ import java.util.List;
 /**
  * The owner entity. This is a simple entity that has a first name, last name, and address.
  * An owner can have many {@link Pet}s; the relationship is stored on the pet side ({@code pet.owner_id}).
+ * <p>
+ * Audited: every change is also stored in {@code owner_aud} (Hibernate Envers), see
+ * {@code GET /owners/{id}/history}.
  */
+@Audited
 @Getter
 @Setter
 @Entity
@@ -53,7 +59,10 @@ public class Owner {
     /**
      * The pets that this owner owns.
      * Changed only through {@link Pet#setOwner(Owner)}, which keeps both sides of the relationship in sync.
+     * Not audited here: the relationship is recorded in the pet's history, and auditing it on the owner too would add
+     * an owner revision every time a pet changes owner, although nothing about the owner itself changed.
      */
+    @NotAudited
     @OneToMany(mappedBy = "owner")
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)

@@ -1,5 +1,6 @@
 package com.interzero.TestServer.service;
 
+import com.interzero.TestServer.dto.HistoryEntry;
 import com.interzero.TestServer.dto.PetFilter;
 import com.interzero.TestServer.dto.PetPatchRequest;
 import com.interzero.TestServer.dto.PetRequest;
@@ -11,6 +12,8 @@ import com.interzero.TestServer.error.ResourceNotFoundException;
 import com.interzero.TestServer.error.VersionMismatchException;
 import com.interzero.TestServer.repository.OwnerRepository;
 import com.interzero.TestServer.repository.PetRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.lang.NonNull;
@@ -33,6 +36,12 @@ public class PetService {
      * Used to resolve the {@code ownerId} of incoming pets.
      */
     private final OwnerRepository ownerRepository;
+
+    /**
+     * Used to read the change history from the Envers tables.
+     */
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public PetService(@NonNull PetRepository petRepository, @NonNull OwnerRepository ownerRepository) {
         this.petRepository = petRepository;
@@ -80,6 +89,25 @@ public class PetService {
     @Transactional(readOnly = true)
     public PetResponse get(Long id) {
         return PetResponse.from(find(id));
+    }
+
+    /**
+     * Gets one page of the change history of a pet, newest change first. Works for deleted
+     * pets too.
+     *
+     * @param id       The ID of the pet.
+     * @param pageable The page to return; any sort is ignored.
+     * @return The requested page of history entries.
+     * @throws ResourceNotFoundException If no pet with this ID has ever existed.
+     */
+    @Transactional(readOnly = true)
+    public Page<HistoryEntry<PetResponse>> history(Long id, Pageable pageable) {
+        Page<HistoryEntry<PetResponse>> history =
+                AuditHistory.load(entityManager, Pet.class, id, pageable, Pet::getVersion, PetResponse::from);
+        if (history.getTotalElements() == 0) {
+            throw new ResourceNotFoundException("Pet %d not found.".formatted(id));
+        }
+        return history;
     }
 
     private Pet find(Long id) {

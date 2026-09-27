@@ -2,6 +2,7 @@ package com.interzero.TestServer.controller;
 
 import com.interzero.TestServer.configuration.CanRead;
 import com.interzero.TestServer.configuration.CanWrite;
+import com.interzero.TestServer.dto.HistoryEntry;
 import com.interzero.TestServer.dto.OwnerFilter;
 import com.interzero.TestServer.dto.OwnerPatchRequest;
 import com.interzero.TestServer.dto.OwnerRequest;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -115,6 +117,24 @@ public class OwnerController {
                                           @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
         log.debug("OwnerController.getOwnerPets({}, {}, {}) called", id, filter, pageable);
         return PageResponse.of(petService.findByOwner(id, filter, Paging.mapSort(pageable, SortableFields.PETS)));
+    }
+
+    /**
+     * Gets the change history of an owner: who changed it, when, and what it looked like after each
+     * change, newest first. Also works after the owner has been deleted.
+     *
+     * @param id   The ID of the owner.
+     * @param page The zero-based page index.
+     * @param size The page size, at most 100.
+     * @return One page of history entries, or 404 if no owner with this ID has ever existed.
+     */
+    @GetMapping("/{id}/history")
+    @CanRead
+    public PageResponse<HistoryEntry<OwnerResponse>> getOwnerHistory(@PathVariable Long id,
+                                                               @RequestParam(defaultValue = "0") int page,
+                                                               @RequestParam(defaultValue = "20") int size) {
+        log.debug("OwnerController.getOwnerHistory({}, page={}, size={}) called", id, page, size);
+        return PageResponse.of(ownerService.history(id, Paging.of(page, size)));
     }
 
     /**

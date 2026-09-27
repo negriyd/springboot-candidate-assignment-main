@@ -2,11 +2,12 @@ package com.interzero.TestServer.controller;
 
 import com.interzero.TestServer.configuration.CanRead;
 import com.interzero.TestServer.configuration.CanWrite;
+import com.interzero.TestServer.dto.HistoryEntry;
 import com.interzero.TestServer.dto.PageResponse;
-import com.interzero.TestServer.dto.PetResponse;
 import com.interzero.TestServer.dto.PetFilter;
 import com.interzero.TestServer.dto.PetPatchRequest;
 import com.interzero.TestServer.dto.PetRequest;
+import com.interzero.TestServer.dto.PetResponse;
 import com.interzero.TestServer.service.PetService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -94,6 +95,24 @@ public class PetController {
     public ResponseEntity<PetResponse> getPet(@PathVariable Long id) {
         log.debug("PetController.getPet({}) called", id);
         return withETag(petService.get(id));
+    }
+
+    /**
+     * Gets the change history of a pet: who changed it, when, and what it looked like after each
+     * change, newest first. Also works after the pet has been deleted.
+     *
+     * @param id   The ID of the pet.
+     * @param page The zero-based page index.
+     * @param size The page size, at most 100.
+     * @return One page of history entries, or 404 if no pet with this ID has ever existed.
+     */
+    @GetMapping("/{id}/history")
+    @CanRead
+    public PageResponse<HistoryEntry<PetResponse>> getPetHistory(@PathVariable Long id,
+                                                               @RequestParam(defaultValue = "0") int page,
+                                                               @RequestParam(defaultValue = "20") int size) {
+        log.debug("PetController.getPetHistory({}, page={}, size={}) called", id, page, size);
+        return PageResponse.of(petService.history(id, Paging.of(page, size)));
     }
 
     /**

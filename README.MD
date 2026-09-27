@@ -163,8 +163,9 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
 
 | Resource | Endpoints                                                                                            |
 |----------|------------------------------------------------------------------------------------------------------|
-| Pets     | `GET /pets`, `GET/PUT/PATCH/DELETE /pets/{id}`, `POST /pets`                                         |
-| Owners   | `GET /owners`, `GET/PUT/PATCH/DELETE /owners/{id}`, `POST /owners`, `GET /owners/{id}/pets`          |
+| Pets     | `GET /pets`, `GET/PUT/PATCH/DELETE /pets/{id}`, `POST /pets`, `GET /pets/{id}/history`               |
+| Owners   | `GET /owners`, `GET/PUT/PATCH/DELETE /owners/{id}`, `POST /owners`, `GET /owners/{id}/pets`,         |
+|          | `GET /owners/{id}/history`                                                                           |
 
 - `POST` returns `201 Created` with a `Location` header. `DELETE` returns `204 No Content`.
 - `PUT` replaces all fields. `PATCH` changes only the fields in the request and also accepts
@@ -186,6 +187,12 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
   resource in the meantime, the request fails with `412 Precondition Failed` instead of silently overwriting that
   change. `If-Match` is optional, so clients that don't use it keep working. Two transactions updating the same row at
   the same moment are rejected with `409 Conflict`.
+- **Change history:** pets and owners are audited with Hibernate Envers. `GET /pets/{id}/history` and
+  `GET /owners/{id}/history` list every change, newest first and paged (`page`, `size`): the revision, when it happened,
+  who made it (`system` for the startup data), whether it was a creation, update or deletion, the version (the `ETag`
+  at that time) and the full state after the change. A pet's state includes its owner as of that change. History stays
+  available after a resource is deleted; the deletion entry shows its last state. Reassigning a pet is recorded in the
+  pet's history only, not the owner's.
 - **Deleting an owner who still has pets returns `409 Conflict`,** so pets are never changed as a hidden side effect.
   Reassign or delete the pets first.
 
@@ -222,5 +229,8 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
 
 ### Trade-offs and Possible Improvements
 
+- The change history is kept in the same in-memory H2 database, so it is lost on restart. It records only changes made
+  through the application (Hibernate); changes made directly in the database, e.g. in the H2 console, are not
+  recorded. Capturing those would need database triggers or change data capture (e.g. Debezium).
 - The in-memory users and H2 database are kept for simplicity. A real deployment would use a persistent database,
   a proper user store, and schema migrations (e.g. Flyway) instead of `ddl-auto=update`.
