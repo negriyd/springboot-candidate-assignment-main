@@ -14,7 +14,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -81,9 +84,20 @@ class OwnerControllerTests {
 
     @Test
     void getOwnersSortsByRequestedField() throws Exception {
-        mockMvc.perform(asAdmin(get("/owners").param("sort", "nameLast,desc").param("sort", "id,desc")))
+        // The database is shared with other test classes, so sort only this test's own owners: their last names all
+        // contain a unique token, and the request filters by it.
+        String token = "sort" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        for (String prefix : new String[]{"B", "C", "A"}) {
+            Owner owner = new Owner();
+            owner.setNameFirst("Test");
+            owner.setNameLast(prefix + token);
+            ownerRepository.save(owner);
+        }
+
+        mockMvc.perform(asAdmin(get("/owners").param("nameLast", token).param("sort", "nameLast,desc")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].nameLast").value("Smith"));
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.content[*].nameLast").value(contains("C" + token, "B" + token, "A" + token)));
     }
 
     @Test
