@@ -1,6 +1,5 @@
 package com.interzero.TestServer.service;
 
-import com.interzero.TestServer.dto.HistoryEntry;
 import com.interzero.TestServer.dto.PetFilter;
 import com.interzero.TestServer.dto.PetPatchRequest;
 import com.interzero.TestServer.dto.PetRequest;
@@ -12,25 +11,20 @@ import com.interzero.TestServer.error.ResourceNotFoundException;
 import com.interzero.TestServer.error.VersionMismatchException;
 import com.interzero.TestServer.repository.OwnerRepository;
 import com.interzero.TestServer.repository.PetRepository;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-
 /**
- * Business logic for {@link Pet}s.
- * <p>
- * Every method runs in a transaction, so a lookup and the write that follows it (e.g. in {@link #update}) see a
- * consistent state.
+ * Business logic for {@link Pet}s. Reading one pet, deleting and the change history come from
+ * {@link AbstractEntityService}; this class adds the pet lists, and create and update, which resolve the
+ * {@code ownerId} of the request to an owner.
  */
 @Service
 @Transactional
-public class PetService {
+public class PetService extends AbstractEntityService<Pet, PetResponse> {
 
     private final PetRepository petRepository;
 
@@ -39,13 +33,8 @@ public class PetService {
      */
     private final OwnerRepository ownerRepository;
 
-    /**
-     * Used to read the change history from the Envers tables.
-     */
-    @PersistenceContext
-    private EntityManager entityManager;
-
     public PetService(@NonNull PetRepository petRepository, @NonNull OwnerRepository ownerRepository) {
+        super(petRepository, Pet.class, PetResponse::from);
         this.petRepository = petRepository;
         this.ownerRepository = ownerRepository;
     }
@@ -61,7 +50,7 @@ public class PetService {
      */
     @Transactional(readOnly = true)
     public Page<PetResponse> findAll(PetFilter filter, Long ownerId, Boolean hasOwner, Pageable pageable) {
-        return petRepository.findAll(Specifications.pets(filter, ownerId, hasOwner), pageable).map(PetResponse::from);
+        return petRepository.findAll(Specifications.pets(filter, ownerId, hasOwner), pageable).map(this::toResponse);
     }
 
     /**
@@ -82,65 +71,6 @@ public class PetService {
     }
 
     /**
-     * Gets a single pet.
-     *
-     * @param id The ID of the pet.
-     * @return The pet.
-     * @throws ResourceNotFoundException If no pet with this ID exists.
-     */
-    @Transactional(readOnly = true)
-    public PetResponse get(Long id) {
-        return PetResponse.from(find(id));
-    }
-
-    /**
-     * Gets one page of the change history of a pet, newest change first. Works for deleted
-     * pets too.
-     *
-     * @param id       The ID of the pet.
-     * @param pageable The page to return; any sort is ignored.
-     * @return The requested page of history entries.
-     * @throws ResourceNotFoundException If no pet with this ID has ever existed.
-     */
-    @Transactional(readOnly = true)
-    public Page<HistoryEntry<PetResponse>> history(Long id, Pageable pageable) {
-        Page<HistoryEntry<PetResponse>> history =
-                AuditHistory.load(entityManager, Pet.class, id, pageable, Pet::getVersion, PetResponse::from);
-        if (history.getTotalElements() == 0) {
-            throw new ResourceNotFoundException("Pet %d not found.".formatted(id));
-        }
-        return history;
-    }
-
-    /**
-     * Gets a pet as it was at a point in time, including its related data as of that moment.
-     *
-     * @param id   The ID of the pet.
-     * @param time The point in time.
-     * @return The pet at that time, with the details of its last change before that time.
-     * @throws ResourceNotFoundException If the pet never existed, did not exist yet at that time, or had already been
-     *                                   deleted.
-     */
-    @Transactional(readOnly = true)
-    public HistoryEntry<PetResponse> asOf(Long id, Instant time) {
-        return AuditHistory.asOf(entityManager, Pet.class, "Pet", id, time, Pet::getVersion, PetResponse::from);
-    }
-
-    private Pet find(Long id) {
-        return petRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Pet %d not found.".formatted(id)));
-    }
-
-    /**
-     * Gets a pet to change, checking that it still has the version the client expects.
-     */
-    private Pet getForUpdate(Long id, Long expectedVersion) {
-        Pet pet = find(id);
-        Versions.check("Pet", id, pet.getVersion(), expectedVersion);
-        return pet;
-    }
-
-    /**
      * Creates a new pet.
      *
      * @param request The pet to create.
@@ -148,7 +78,7 @@ public class PetService {
      * @throws InvalidReferenceException If the request refers to an owner that does not exist.
      */
     public PetResponse create(PetRequest request) {
-        return PetResponse.from(petRepository.save(request.applyTo(new Pet(), this::findOwnerForPet)));
+        return saveAndMap(request.applyTo(new Pet(), this::findOwnerForPet));
     }
 
     /**
@@ -164,7 +94,7 @@ public class PetService {
      * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
      */
     public PetResponse update(Long id, PetRequest request, Long expectedVersion) {
-        return saveAndMap(request.applyTo(getForUpdate(id, expectedVersion), this::findOwnerForPet));
+        return saveAndMap(request.applyTo(findForUpdate(id, expectedVersion), this::findOwnerForPet));
     }
 
     /**
@@ -181,30 +111,13 @@ public class PetService {
      * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
      */
     public PetResponse patch(Long id, PetPatchRequest request, Long expectedVersion) {
-        return saveAndMap(request.applyTo(getForUpdate(id, expectedVersion), this::findOwnerForPet));
+        return saveAndMap(request.applyTo(findForUpdate(id, expectedVersion), this::findOwnerForPet));
     }
 
     /**
-     * Deletes a pet.
-     *
-     * @param id              The ID of the pet.
-     * @param expectedVersion The version the client last read ({@code If-Match}), or {@code null} to skip
-     *                        the check.
-     * @throws ResourceNotFoundException If no pet with this ID exists.
-     * @throws VersionMismatchException  If {@code expectedVersion} does not match the current version.
+     * Resolves the {@code ownerId} of a pet request. An unknown owner is a client error (400), not a 404: the
+     * resource addressed by the URL exists, only a reference in the body is invalid.
      */
-    public void delete(Long id, Long expectedVersion) {
-        petRepository.delete(getForUpdate(id, expectedVersion));
-    }
-
-    /**
-     * Saves a changed pet and maps it. Flushes first, so the response carries the incremented version (the
-     * {@code ETag}) rather than the version from before the update.
-     */
-    private PetResponse saveAndMap(Pet pet) {
-        return PetResponse.from(petRepository.saveAndFlush(pet));
-    }
-
     private Owner findOwnerForPet(Long ownerId) {
         if (ownerId == null) {
             return null;

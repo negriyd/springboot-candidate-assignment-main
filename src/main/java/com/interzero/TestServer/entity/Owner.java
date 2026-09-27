@@ -22,7 +22,7 @@ import java.util.List;
 @Getter
 @Setter
 @Entity
-public class Owner {
+public class Owner implements VersionedEntity {
 
     /**
      * The ID of the owner. This is the primary key of the owner table.

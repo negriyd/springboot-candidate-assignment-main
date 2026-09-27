@@ -17,7 +17,7 @@ import org.hibernate.envers.Audited;
 @Getter
 @Setter
 @Entity
-public class Pet {
+public class Pet implements VersionedEntity {
 
     /**
      * The ID of the pet. This is the primary key of the pet table.

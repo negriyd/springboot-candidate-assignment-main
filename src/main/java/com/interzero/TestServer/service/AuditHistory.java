@@ -3,6 +3,7 @@ package com.interzero.TestServer.service;
 import com.interzero.TestServer.audit.AuditRevision;
 import com.interzero.TestServer.dto.HistoryEntry;
 import com.interzero.TestServer.dto.HistoryEntry.ChangeType;
+import com.interzero.TestServer.entity.VersionedEntity;
 import com.interzero.TestServer.error.ResourceNotFoundException;
 import jakarta.persistence.EntityManager;
 import org.hibernate.envers.AuditReader;
@@ -34,15 +35,15 @@ final class AuditHistory {
      * @param type          The audited entity type.
      * @param id            The entity ID. The entity may have been deleted; its history is still returned.
      * @param pageable      The page to return; any sort is ignored, the history is always newest first.
-     * @param version       Reads the version from a historical entity.
      * @param mapper        Maps a historical entity to its API representation. Called inside the transaction, so it
      *                      can follow relations, which Envers resolves as of the same revision.
      * @param <E>           The entity type.
      * @param <R>           The API representation.
      * @return The page of history entries; empty if the entity never existed.
      */
-    static <E, R> Page<HistoryEntry<R>> load(EntityManager entityManager, Class<E> type, Long id, Pageable pageable,
-                                             Function<E, Long> version, Function<E, R> mapper) {
+    static <E extends VersionedEntity, R> Page<HistoryEntry<R>> load(EntityManager entityManager, Class<E> type,
+                                                                     Long id, Pageable pageable,
+                                                                     Function<E, R> mapper) {
         AuditReader reader = AuditReaderFactory.get(entityManager);
 
         long total = ((Number) revisionsOf(reader, type, id)
@@ -68,7 +69,7 @@ final class AuditHistory {
                     Instant.ofEpochMilli(revision.getTimestamp()),
                     revision.getUsername(),
                     changeType((RevisionType) row[2]),
-                    version.apply(entity),
+                    entity.getVersion(),
                     mapper.apply(entity));
         }).toList();
         return new PageImpl<>(entries, pageable, total);
@@ -82,11 +83,9 @@ final class AuditHistory {
      * revision fields of the result describe the entity's own last change at or before {@code time}.
      *
      * @param entityManager The entity manager of the current transaction.
-     * @param type          The audited entity type.
-     * @param name          The entity name for error messages, e.g. {@code "Pet"}.
+     * @param type          The audited entity type; its simple name is used in error messages.
      * @param id            The entity ID.
      * @param time          The point in time.
-     * @param version       Reads the version from a historical entity.
      * @param mapper        Maps a historical entity to its API representation. Called inside the transaction.
      * @param <E>           The entity type.
      * @param <R>           The API representation.
@@ -94,9 +93,10 @@ final class AuditHistory {
      * @throws ResourceNotFoundException If the entity never existed, did not exist yet at that time, or had already
      *                                   been deleted.
      */
-    static <E, R> HistoryEntry<R> asOf(EntityManager entityManager, Class<E> type, String name, Long id,
-                                       Instant time, Function<E, Long> version, Function<E, R> mapper) {
+    static <E extends VersionedEntity, R> HistoryEntry<R> asOf(EntityManager entityManager, Class<E> type, Long id,
+                                                               Instant time, Function<E, R> mapper) {
         AuditReader reader = AuditReaderFactory.get(entityManager);
+        String name = type.getSimpleName();
 
         @SuppressWarnings("unchecked")
         List<Object[]> lastChange = revisionsOf(reader, type, id)
@@ -129,7 +129,7 @@ final class AuditHistory {
                 Instant.ofEpochMilli(revision.getTimestamp()),
                 revision.getUsername(),
                 changeType(revisionType),
-                version.apply(entity),
+                entity.getVersion(),
                 mapper.apply(entity));
     }
 
