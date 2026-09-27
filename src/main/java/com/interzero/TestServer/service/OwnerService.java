@@ -19,6 +19,8 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+
 /**
  * Business logic for {@link Owner}s.
  * <p>
@@ -88,6 +90,20 @@ public class OwnerService {
             throw new ResourceNotFoundException("Owner %d not found.".formatted(id));
         }
         return history;
+    }
+
+    /**
+     * Gets an owner as it was at a point in time, including its related data as of that moment.
+     *
+     * @param id   The ID of the owner.
+     * @param time The point in time.
+     * @return The owner at that time, with the details of its last change before that time.
+     * @throws ResourceNotFoundException If the owner never existed, did not exist yet at that time, or had already been
+     *                                   deleted.
+     */
+    @Transactional(readOnly = true)
+    public HistoryEntry<OwnerResponse> asOf(Long id, Instant time) {
+        return AuditHistory.asOf(entityManager, Owner.class, "Owner", id, time, Owner::getVersion, OwnerResponse::from);
     }
 
     private Owner find(Long id) {

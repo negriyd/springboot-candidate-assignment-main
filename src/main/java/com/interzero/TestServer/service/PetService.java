@@ -20,6 +20,8 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+
 /**
  * Business logic for {@link Pet}s.
  * <p>
@@ -108,6 +110,20 @@ public class PetService {
             throw new ResourceNotFoundException("Pet %d not found.".formatted(id));
         }
         return history;
+    }
+
+    /**
+     * Gets a pet as it was at a point in time, including its related data as of that moment.
+     *
+     * @param id   The ID of the pet.
+     * @param time The point in time.
+     * @return The pet at that time, with the details of its last change before that time.
+     * @throws ResourceNotFoundException If the pet never existed, did not exist yet at that time, or had already been
+     *                                   deleted.
+     */
+    @Transactional(readOnly = true)
+    public HistoryEntry<PetResponse> asOf(Long id, Instant time) {
+        return AuditHistory.asOf(entityManager, Pet.class, "Pet", id, time, Pet::getVersion, PetResponse::from);
     }
 
     private Pet find(Long id) {

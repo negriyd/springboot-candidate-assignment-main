@@ -163,9 +163,10 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
 
 | Resource | Endpoints                                                                                            |
 |----------|------------------------------------------------------------------------------------------------------|
-| Pets     | `GET /pets`, `GET/PUT/PATCH/DELETE /pets/{id}`, `POST /pets`, `GET /pets/{id}/history`               |
+| Pets     | `GET /pets`, `GET/PUT/PATCH/DELETE /pets/{id}`, `POST /pets`, `GET /pets/{id}/history`,              |
+|          | `GET /pets/{id}/history/as-of`                                                                       |
 | Owners   | `GET /owners`, `GET/PUT/PATCH/DELETE /owners/{id}`, `POST /owners`, `GET /owners/{id}/pets`,         |
-|          | `GET /owners/{id}/history`                                                                           |
+|          | `GET /owners/{id}/history`, `GET /owners/{id}/history/as-of`                                         |
 
 - `POST` returns `201 Created` with a `Location` header. `DELETE` returns `204 No Content`.
 - `PUT` replaces all fields. `PATCH` changes only the fields in the request and also accepts
@@ -193,6 +194,11 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
   at that time) and the full state after the change. A pet's state includes its owner as of that change. History stays
   available after a resource is deleted; the deletion entry shows its last state. Reassigning a pet is recorded in the
   pet's history only, not the owner's.
+- **State at a point in time:** `GET /pets/{id}/history/as-of?time=2026-09-27T21:11:22Z` (and the same for owners)
+  returns the resource as it was at that moment, in the same format as a history entry. Related data is shown as of
+  the same moment: if a pet did not change but its owner was renamed before that time, the result has the new name.
+  The time is ISO-8601 with a time zone (a `+` in the offset must be URL-encoded as `%2B`). It returns 404 if the
+  resource did not exist yet or had already been deleted at that time.
 - **Deleting an owner who still has pets returns `409 Conflict`,** so pets are never changed as a hidden side effect.
   Reassign or delete the pets first.
 

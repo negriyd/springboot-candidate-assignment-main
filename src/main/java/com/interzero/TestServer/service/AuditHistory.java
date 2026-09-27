@@ -3,6 +3,7 @@ package com.interzero.TestServer.service;
 import com.interzero.TestServer.audit.AuditRevision;
 import com.interzero.TestServer.dto.HistoryEntry;
 import com.interzero.TestServer.dto.HistoryEntry.ChangeType;
+import com.interzero.TestServer.error.ResourceNotFoundException;
 import jakarta.persistence.EntityManager;
 import org.hibernate.envers.AuditReader;
 import org.hibernate.envers.AuditReaderFactory;
@@ -14,6 +15,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.function.Function;
 
@@ -70,6 +72,65 @@ final class AuditHistory {
                     mapper.apply(entity));
         }).toList();
         return new PageImpl<>(entries, pageable, total);
+    }
+
+    /**
+     * Gets an entity as it was at a point in time.
+     * <p>
+     * The state is read at the global revision in effect at that time, so relations are also shown as they were then:
+     * if a pet did not change but its owner was renamed before {@code time}, the result has the new owner name. The
+     * revision fields of the result describe the entity's own last change at or before {@code time}.
+     *
+     * @param entityManager The entity manager of the current transaction.
+     * @param type          The audited entity type.
+     * @param name          The entity name for error messages, e.g. {@code "Pet"}.
+     * @param id            The entity ID.
+     * @param time          The point in time.
+     * @param version       Reads the version from a historical entity.
+     * @param mapper        Maps a historical entity to its API representation. Called inside the transaction.
+     * @param <E>           The entity type.
+     * @param <R>           The API representation.
+     * @return The entity at that time, with its last change before that time.
+     * @throws ResourceNotFoundException If the entity never existed, did not exist yet at that time, or had already
+     *                                   been deleted.
+     */
+    static <E, R> HistoryEntry<R> asOf(EntityManager entityManager, Class<E> type, String name, Long id,
+                                       Instant time, Function<E, Long> version, Function<E, R> mapper) {
+        AuditReader reader = AuditReaderFactory.get(entityManager);
+
+        @SuppressWarnings("unchecked")
+        List<Object[]> lastChange = revisionsOf(reader, type, id)
+                .add(AuditEntity.revisionProperty("timestamp").le(time.toEpochMilli()))
+                .addOrder(AuditEntity.revisionNumber().desc())
+                .setMaxResults(1)
+                .getResultList();
+
+        if (lastChange.isEmpty()) {
+            boolean everExisted = !revisionsOf(reader, type, id).setMaxResults(1).getResultList().isEmpty();
+            throw new ResourceNotFoundException(everExisted
+                    ? "%s %d did not exist yet at %s.".formatted(name, id, time)
+                    : "%s %d not found.".formatted(name, id));
+        }
+
+        AuditRevision revision = (AuditRevision) lastChange.get(0)[1];
+        RevisionType revisionType = (RevisionType) lastChange.get(0)[2];
+        if (revisionType == RevisionType.DEL) {
+            throw new ResourceNotFoundException("%s %d had already been deleted at %s (deleted at %s)."
+                    .formatted(name, id, time, Instant.ofEpochMilli(revision.getTimestamp())));
+        }
+
+        // Read the entity at the global revision in effect at that time, not at its own last revision, so that
+        // relations are resolved as of the same moment.
+        Number revisionAtTime = reader.getRevisionNumberForDate(Date.from(time));
+        E entity = reader.find(type, id, revisionAtTime);
+
+        return new HistoryEntry<>(
+                revision.getId(),
+                Instant.ofEpochMilli(revision.getTimestamp()),
+                revision.getUsername(),
+                changeType(revisionType),
+                version.apply(entity),
+                mapper.apply(entity));
     }
 
     /**

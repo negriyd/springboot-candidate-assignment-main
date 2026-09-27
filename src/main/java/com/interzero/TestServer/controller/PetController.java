@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -34,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
+import java.time.OffsetDateTime;
 
 /**
  * The REST controller for all things related to {@link com.interzero.TestServer.entity.Pet}s.
@@ -113,6 +115,25 @@ public class PetController {
                                                                @RequestParam(defaultValue = "20") int size) {
         log.debug("PetController.getPetHistory({}, page={}, size={}) called", id, page, size);
         return PageResponse.of(petService.history(id, Paging.of(page, size)));
+    }
+
+    /**
+     * Gets a pet as it was at a point in time, e.g. {@code ?time=2026-09-27T21:11:22Z}. Related data is also
+     * shown as of that moment. The revision fields describe the pet's last change at or before that time.
+     * <p>
+     * The time is ISO-8601 with a time zone; a {@code +} in the offset must be URL-encoded as {@code %2B}.
+     *
+     * @param id   The ID of the pet.
+     * @param time The point in time.
+     * @return The pet at that time, or 404 if it never existed, did not exist yet, or had already been deleted.
+     */
+    @GetMapping("/{id}/history/as-of")
+    @CanRead
+    public HistoryEntry<PetResponse> getPetAsOf(@PathVariable Long id,
+                                               @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+                                               OffsetDateTime time) {
+        log.debug("PetController.getPetAsOf({}, {}) called", id, time);
+        return petService.asOf(id, time.toInstant());
     }
 
     /**
