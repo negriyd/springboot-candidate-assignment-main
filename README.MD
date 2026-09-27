@@ -53,19 +53,36 @@ with additional functionalities and improve its architecture.
 The server starts on `http://localhost:8080` with an in-memory H2 database, which is filled with sample owners and
 pets on every start. Data is not kept between restarts.
 
-### Credentials
+### Users and Roles
 
-Every request needs HTTP Basic authentication. There is one user per role; their usernames and passwords are
-configured in `src/main/resources/application.properties`:
+Every API request needs HTTP Basic authentication. Users are defined in `src/main/resources/application.properties`;
+the key after `users.` is the username:
 
-| Role     | Properties                                                          | Access                 |
-|----------|---------------------------------------------------------------------|------------------------|
-| `READER` | `app.security.reader.username`, `app.security.reader.password`      | read only (`GET`)      |
-| `WRITER` | `app.security.writer.username`, `app.security.writer.password`      | create, update, delete |
-| `ADMIN`  | `app.security.admin.username`, `app.security.admin.password`        | everything             |
+```properties
+app.security.users.reader.password=...
+app.security.users.reader.roles=READER
+```
 
-The properties can be overridden without editing the file, e.g. with environment variables such as
-`APP_SECURITY_ADMIN_PASSWORD`.
+| Role     | Access                 |
+|----------|------------------------|
+| `READER` | read only (`GET`)      |
+| `WRITER` | create, update, delete |
+| `ADMIN`  | everything             |
+
+- **Add a user:** add a `password` and `roles` line for a new username. No code change is needed.
+- **Several roles:** list them comma-separated, e.g. `app.security.users.auditor.roles=READER,WRITER`. Role names are
+  case-insensitive.
+- **Override without editing the file:** use environment variables, e.g. `APP_SECURITY_USERS_ADMIN_PASSWORD`. Only
+  that value changes; the other users stay. A new user can be added the same way
+  (`APP_SECURITY_USERS_AUDITOR_PASSWORD` and `APP_SECURITY_USERS_AUDITOR_ROLES`).
+- **Hashed passwords:** instead of plain text, a password can be given already hashed, with its algorithm prefix,
+  e.g. `{bcrypt}$2y$10$...`. One way to create a BCrypt hash:
+  `htpasswd -bnBC 10 "" 'the-password' | tr -d ':\n'`.
+- An invalid configuration (a user without a password or roles, or an unknown role) stops the application at startup
+  with an error naming the property.
+
+Adding a new **role** still needs a code change: the role must be added to `Role` and to the access rules on the
+endpoints (`@CanRead`, `@CanWrite`).
 
 ### Try It Out
 
@@ -74,8 +91,8 @@ The properties can be overridden without editing the file, e.g. with environment
   another user to switch roles.
 - **Postman:** import `postman/PetManagement.postman_collection.json`. It has 31 requests with tests: CRUD for owners
   and pets, filtering and paging, the delete rules, and error and security cases. Credentials and the base URL are
-  collection variables; set them to the values from `application.properties` before running. Run the whole collection in order (Collection Runner) with the server started, or from the
-  command line:
+  collection variables; set them to the values from `application.properties` before running. Run the whole
+  collection in order (Collection Runner) with the server started, or from the command line:
 
 ```bash
 npx newman run postman/PetManagement.postman_collection.json
@@ -182,8 +199,8 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
 
 ### Security
 
-- Stateless HTTP Basic authentication with three in-memory users, one per role (credentials in
-  `application.properties`):
+- Stateless HTTP Basic authentication with in-memory users defined in `application.properties`
+  (`SecurityUsersProperties`). Users can be added and given one or more roles through properties only:
   - `READER` can only read;
   - `WRITER` can only create, update and delete;
   - `ADMIN` can do both.

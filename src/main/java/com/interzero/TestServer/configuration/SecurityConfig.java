@@ -2,8 +2,8 @@ package com.interzero.TestServer.configuration;
 
 import com.interzero.TestServer.error.SecurityErrorHandler;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -13,11 +13,15 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+
+import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Security configuration.
@@ -40,12 +44,18 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@EnableConfigurationProperties(SecurityUsersProperties.class)
 public class SecurityConfig {
 
     /**
      * Swagger UI and the OpenAPI document.
      */
     private static final String[] API_DOCS = {"/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**"};
+
+    /**
+     * A password that is already encoded, with the encoder id in front, e.g. <code>{bcrypt}$2a$10$...</code>.
+     */
+    private static final Pattern ENCODED_PASSWORD = Pattern.compile("\\{[a-zA-Z0-9-]+}.+");
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, SecurityErrorHandler securityErrorHandler) throws Exception {
@@ -73,30 +83,22 @@ public class SecurityConfig {
     }
 
     /**
-     * One in-memory user per role. Usernames and passwords are defined in {@code application.properties}.
+     * The API users, created from {@link SecurityUsersProperties} ({@code app.security.users.*} in
+     * {@code application.properties}). Plain-text passwords are hashed here; values that already carry an encoder
+     * prefix such as <code>{bcrypt}</code> are used as they are.
      */
     @Bean
-    public UserDetailsService userDetailsService(
-            PasswordEncoder passwordEncoder,
-            @Value("${app.security.reader.username}") String readerUsername,
-            @Value("${app.security.reader.password}") String readerPassword,
-            @Value("${app.security.writer.username}") String writerUsername,
-            @Value("${app.security.writer.password}") String writerPassword,
-            @Value("${app.security.admin.username}") String adminUsername,
-            @Value("${app.security.admin.password}") String adminPassword) {
-        return new InMemoryUserDetailsManager(
-                User.withUsername(readerUsername)
-                        .password(passwordEncoder.encode(readerPassword))
-                        .roles(Role.READER.name())
-                        .build(),
-                User.withUsername(writerUsername)
-                        .password(passwordEncoder.encode(writerPassword))
-                        .roles(Role.WRITER.name())
-                        .build(),
-                User.withUsername(adminUsername)
-                        .password(passwordEncoder.encode(adminPassword))
-                        .roles(Role.ADMIN.name())
-                        .build()
-        );
+    public UserDetailsService userDetailsService(PasswordEncoder passwordEncoder, SecurityUsersProperties properties) {
+        List<UserDetails> users = properties.users().entrySet().stream()
+                .map(entry -> User.withUsername(entry.getKey())
+                        .password(encode(passwordEncoder, entry.getValue().password()))
+                        .roles(entry.getValue().roles().stream().map(Role::name).toArray(String[]::new))
+                        .build())
+                .toList();
+        return new InMemoryUserDetailsManager(users);
+    }
+
+    private static String encode(PasswordEncoder passwordEncoder, String password) {
+        return ENCODED_PASSWORD.matcher(password).matches() ? password : passwordEncoder.encode(password);
     }
 }
