@@ -15,7 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Verifies that API users are defined by properties only: users can be added, can have several roles, and single
  * values can be overridden without losing the other users. The extra properties below are added on top of
- * {@code application.properties}, the same way an environment variable or a profile would be.
+ * {@code application.yml}, the same way an environment variable or a profile would be.
  */
 @SpringBootTest(properties = {
         "app.security.users.auditor.password=auditor-password",
@@ -60,7 +60,7 @@ class SecurityUsersTests {
         mockMvc.perform(get("/pets").with(httpBasic("reader", "changed-password")))
                 .andExpect(status().isOk());
 
-        // Users from application.properties that were not overridden are still there.
+        // Users from application.yml that were not overridden are still there.
         mockMvc.perform(get("/pets").with(httpBasic("admin", "admin-password")))
                 .andExpect(status().isOk());
         mockMvc.perform(get("/").with(httpBasic("writer", "writer-password")))

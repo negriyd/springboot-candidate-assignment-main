@@ -20,14 +20,14 @@ import org.springframework.context.annotation.Configuration;
                 title = "Pet Management API",
                 version = "v1",
                 description = "Manage owners and their pets. Every endpoint requires HTTP Basic authentication: "
-                        + "click \"Authorize\" and log in as a user from application.properties. "
+                        + "click \"Authorize\" and log in as a user from application.yml. "
                         + "READER can read, WRITER can create, update and delete, ADMIN can do both."),
         security = @SecurityRequirement(name = OpenApiConfig.BASIC_AUTH))
 @SecurityScheme(
         name = OpenApiConfig.BASIC_AUTH,
         type = SecuritySchemeType.HTTP,
         scheme = "basic",
-        description = "Username and password of one of the users configured in application.properties.")
+        description = "Username and password of one of the users configured in application.yml.")
 public class OpenApiConfig {
 
     /**

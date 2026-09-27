@@ -1,0 +1,46 @@
+app:
+  security:
+    # API users (see SecurityUsersProperties). The key under "users" is the username.
+    # To add a user, add a password and one or more roles: READER, WRITER, ADMIN, e.g. roles: [READER, WRITER].
+    users:
+      reader:
+        password: reader-password
+        roles: [READER]
+      writer:
+        password: writer-password
+        roles: [WRITER]
+      admin:
+        password: admin-password
+        roles: [ADMIN]
+      dima:
+        password: dima
+        roles: [READER,WRITER]
+
+spring:
+  # Datasource's configuration for H2
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password: ""
+
+  # H2 console configuration
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  # JPA / Hibernate configuration
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    # Close the persistence context when the service transaction ends, not at the end of the HTTP request
+    open-in-view: false
+
+  # Paging: cap the page size clients can request
+  data:
+    web:
+      pageable:
+        max-page-size: 100

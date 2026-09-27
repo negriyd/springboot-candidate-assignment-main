@@ -14,7 +14,7 @@ with additional functionalities and improve its architecture.
 
 ## Security Note
 
-- Endpoints are secured with Spring Security. The default credentials are defined in the `application.properties` file.
+- Endpoints are secured with Spring Security. The default credentials are defined in the `application.yml` file.
   You will need to use these credentials when making requests through your preferred method (e.g., Postman).
 - You can use `HelloController` to test whether you have the application running and set up properly. Sending a GET
   request to `localhost:8080` will return a "Hello, World!" message if it is running properly.
@@ -55,12 +55,16 @@ pets on every start. Data is not kept between restarts.
 
 ### Users and Roles
 
-Every API request needs HTTP Basic authentication. Users are defined in `src/main/resources/application.properties`;
-the key after `users.` is the username:
+Every API request needs HTTP Basic authentication. Users are defined in `src/main/resources/application.yml`;
+the key under `users` is the username:
 
-```properties
-app.security.users.reader.password=...
-app.security.users.reader.roles=READER
+```yaml
+app:
+  security:
+    users:
+      reader:
+        password: ...
+        roles: [READER]
 ```
 
 | Role     | Access                 |
@@ -69,9 +73,8 @@ app.security.users.reader.roles=READER
 | `WRITER` | create, update, delete |
 | `ADMIN`  | everything             |
 
-- **Add a user:** add a `password` and `roles` line for a new username. No code change is needed.
-- **Several roles:** list them comma-separated, e.g. `app.security.users.auditor.roles=READER,WRITER`. Role names are
-  case-insensitive.
+- **Add a user:** add an entry with a `password` and `roles` under a new username. No code change is needed.
+- **Several roles:** list them, e.g. `roles: [READER, WRITER]`. Role names are case-insensitive.
 - **Override without editing the file:** use environment variables, e.g. `APP_SECURITY_USERS_ADMIN_PASSWORD`. Only
   that value changes; the other users stay. A new user can be added the same way
   (`APP_SECURITY_USERS_AUDITOR_PASSWORD` and `APP_SECURITY_USERS_AUDITOR_ROLES`).
@@ -91,7 +94,7 @@ endpoints (`@CanRead`, `@CanWrite`).
   another user to switch roles.
 - **Postman:** import `postman/PetManagement.postman_collection.json`. It has 31 requests with tests: CRUD for owners
   and pets, filtering and paging, the delete rules, and error and security cases. Credentials and the base URL are
-  collection variables; set them to the values from `application.properties` before running. Run the whole
+  collection variables; set them to the values from `application.yml` before running. Run the whole
   collection in order (Collection Runner) with the server started, or from the command line:
 
 ```bash
@@ -101,7 +104,7 @@ npx newman run postman/PetManagement.postman_collection.json
 - **curl:**
 
 ```bash
-# Credentials from application.properties, as "username:password"
+# Credentials from application.yml, as "username:password"
 READER='<reader-username>:<reader-password>'
 WRITER='<writer-username>:<writer-password>'
 
@@ -199,7 +202,7 @@ The tests are integration tests (Spring Boot + MockMvc + H2) and need no externa
 
 ### Security
 
-- Stateless HTTP Basic authentication with in-memory users defined in `application.properties`
+- Stateless HTTP Basic authentication with in-memory users defined in `application.yml`
   (`SecurityUsersProperties`). Users can be added and given one or more roles through properties only:
   - `READER` can only read;
   - `WRITER` can only create, update and delete;

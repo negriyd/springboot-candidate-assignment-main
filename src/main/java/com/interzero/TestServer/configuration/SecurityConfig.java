@@ -84,7 +84,7 @@ public class SecurityConfig {
 
     /**
      * The API users, created from {@link SecurityUsersProperties} ({@code app.security.users.*} in
-     * {@code application.properties}). Plain-text passwords are hashed here; values that already carry an encoder
+     * {@code application.yml}). Plain-text passwords are hashed here; values that already carry an encoder
      * prefix such as <code>{bcrypt}</code> are used as they are.
      */
     @Bean
