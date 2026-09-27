@@ -2,7 +2,6 @@ package com.interzero.TestServer.controller;
 
 import com.interzero.TestServer.configuration.CanRead;
 import com.interzero.TestServer.configuration.CanWrite;
-import com.interzero.TestServer.dto.HistoryEntry;
 import com.interzero.TestServer.dto.PageResponse;
 import com.interzero.TestServer.dto.PetFilter;
 import com.interzero.TestServer.dto.PetPatchRequest;
@@ -10,17 +9,13 @@ import com.interzero.TestServer.dto.PetRequest;
 import com.interzero.TestServer.dto.PetResponse;
 import com.interzero.TestServer.service.PetService;
 import jakarta.validation.Valid;
-import lombok.extern.slf4j.Slf4j;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.lang.NonNull;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,33 +25,22 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-
-import java.net.URI;
-import java.time.OffsetDateTime;
 
 /**
- * The REST controller for all things related to {@link com.interzero.TestServer.entity.Pet}s.
- * Returns {@link PetResponse}s, never entities.
+ * The REST controller for {@link com.interzero.TestServer.entity.Pet}s. Returns {@link PetResponse}s, never entities.
  * <p>
- * Handles HTTP concerns only (mapping, status codes, headers); business logic lives in {@link PetService}.
- * Errors such as a missing pet are thrown by the service and turned into responses by
- * {@link com.interzero.TestServer.error.GlobalExceptionHandler}.
- * <p>
- * Single-resource responses carry an {@code ETag}. Sending it back in {@code If-Match} on {@code PUT},
- * {@code PATCH} or {@code DELETE} makes the change fail with 412 if someone else changed the resource first;
- * see {@link ETags}.
+ * {@code GET}, {@code DELETE}, history and as-of for a single pet come from {@link AbstractEntityController}; this
+ * class adds the pet list and create and update.
  */
-@Slf4j
 @RestController
 @RequestMapping("pets")
-public class PetController {
+public class PetController extends AbstractEntityController<PetResponse> {
 
     private final PetService petService;
 
     public PetController(@NonNull PetService petService) {
+        super(petService);
         this.petService = petService;
     }
 
@@ -78,62 +62,13 @@ public class PetController {
     @GetMapping
     @CanRead
     public PageResponse<PetResponse> getPets(@Valid @ParameterObject PetFilter filter,
-                                     @RequestParam(required = false) Long ownerId,
-                                     @RequestParam(required = false) Boolean hasOwner,
-                                     @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
-        log.debug("PetController.getPets({}, ownerId={}, hasOwner={}, {}) called", filter, ownerId, hasOwner, pageable);
+                                             @RequestParam(required = false) Long ownerId,
+                                             @RequestParam(required = false) Boolean hasOwner,
+                                             @ParameterObject @PageableDefault(size = 20, sort = "id")
+                                             Pageable pageable) {
+        log.debug("getPets({}, ownerId={}, hasOwner={}, {}) called", filter, ownerId, hasOwner, pageable);
         return PageResponse.of(
                 petService.findAll(filter, ownerId, hasOwner, Paging.mapSort(pageable, SortableFields.PETS)));
-    }
-
-    /**
-     * Gets a single pet.
-     *
-     * @param id The ID of the pet.
-     * @return The pet, or 404 if no pet with this ID exists.
-     */
-    @GetMapping("/{id}")
-    @CanRead
-    public ResponseEntity<PetResponse> getPet(@PathVariable Long id) {
-        log.debug("PetController.getPet({}) called", id);
-        return withETag(petService.get(id));
-    }
-
-    /**
-     * Gets the change history of a pet: who changed it, when, and what it looked like after each
-     * change, newest first. Also works after the pet has been deleted.
-     *
-     * @param id   The ID of the pet.
-     * @param page The zero-based page index.
-     * @param size The page size, at most 100.
-     * @return One page of history entries, or 404 if no pet with this ID has ever existed.
-     */
-    @GetMapping("/{id}/history")
-    @CanRead
-    public PageResponse<HistoryEntry<PetResponse>> getPetHistory(@PathVariable Long id,
-                                                               @RequestParam(defaultValue = "0") int page,
-                                                               @RequestParam(defaultValue = "20") int size) {
-        log.debug("PetController.getPetHistory({}, page={}, size={}) called", id, page, size);
-        return PageResponse.of(petService.history(id, Paging.of(page, size)));
-    }
-
-    /**
-     * Gets a pet as it was at a point in time, e.g. {@code ?time=2026-09-27T21:11:22Z}. Related data is also
-     * shown as of that moment. The revision fields describe the pet's last change at or before that time.
-     * <p>
-     * The time is ISO-8601 with a time zone; a {@code +} in the offset must be URL-encoded as {@code %2B}.
-     *
-     * @param id   The ID of the pet.
-     * @param time The point in time.
-     * @return The pet at that time, or 404 if it never existed, did not exist yet, or had already been deleted.
-     */
-    @GetMapping("/{id}/history/as-of")
-    @CanRead
-    public HistoryEntry<PetResponse> getPetAsOf(@PathVariable Long id,
-                                               @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-                                               OffsetDateTime time) {
-        log.debug("PetController.getPetAsOf({}, {}) called", id, time);
-        return petService.asOf(id, time.toInstant());
     }
 
     /**
@@ -146,31 +81,27 @@ public class PetController {
     @PostMapping
     @CanWrite
     public ResponseEntity<PetResponse> createPet(@Valid @RequestBody PetRequest request) {
-        log.debug("PetController.createPet() called");
-        PetResponse created = petService.create(request);
-        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
-                .path("/{id}")
-                .buildAndExpand(created.id())
-                .toUri();
-        return ResponseEntity.created(location).eTag(ETags.of(created.version())).body(created);
+        log.debug("createPet() called");
+        return created(petService.create(request));
     }
 
     /**
      * Replaces all fields of an existing pet.
      *
-     * @param id       The ID of the pet.
-     * @param ifMatch  Optional {@code ETag} the client last read; if it no longer matches, 412.
-     * @param request  The new state of the pet.
+     * @param id      The ID of the pet.
+     * @param ifMatch Optional {@code ETag} the client last read; if it no longer matches, 412.
+     * @param request The new state of the pet.
      * @return The updated pet, 404 if no pet with this ID exists,
      * or 400 if the request refers to an owner that does not exist.
      */
     @PutMapping("/{id}")
     @CanWrite
     public ResponseEntity<PetResponse> updatePet(@PathVariable Long id,
-                                        @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-                                        @Valid @RequestBody PetRequest request) {
-        log.debug("PetController.updatePet({}) called", id);
-        return withETag(petService.update(id, request, ETags.parseIfMatch(ifMatch)));
+                                                 @RequestHeader(value = HttpHeaders.IF_MATCH, required = false)
+                                                 String ifMatch,
+                                                 @Valid @RequestBody PetRequest request) {
+        log.debug("updatePet({}) called", id);
+        return ok(petService.update(id, request, ETags.parseIfMatch(ifMatch)));
     }
 
     /**
@@ -179,37 +110,19 @@ public class PetController {
      * <p>
      * Accepts {@code application/json} and {@code application/merge-patch+json} (RFC 7396), whose semantics match.
      *
-     * @param id       The ID of the pet.
-     * @param ifMatch  Optional {@code ETag} the client last read; if it no longer matches, 412.
-     * @param request  The fields to change.
+     * @param id      The ID of the pet.
+     * @param ifMatch Optional {@code ETag} the client last read; if it no longer matches, 412.
+     * @param request The fields to change.
      * @return The updated pet, 404 if no pet with this ID exists,
      * or 400 if the request refers to an owner that does not exist.
      */
     @PatchMapping(path = "/{id}", consumes = {MediaType.APPLICATION_JSON_VALUE, "application/merge-patch+json"})
     @CanWrite
     public ResponseEntity<PetResponse> patchPet(@PathVariable Long id,
-                                       @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-                                       @Valid @RequestBody PetPatchRequest request) {
-        log.debug("PetController.patchPet({}) called", id);
-        return withETag(petService.patch(id, request, ETags.parseIfMatch(ifMatch)));
-    }
-
-    /**
-     * Deletes a pet.
-     *
-     * @param id       The ID of the pet.
-     * @param ifMatch  Optional {@code ETag} the client last read; if it no longer matches, 412.
-     */
-    @DeleteMapping("/{id}")
-    @CanWrite
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deletePet(@PathVariable Long id,
-                          @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
-        log.debug("PetController.deletePet({}) called", id);
-        petService.delete(id, ETags.parseIfMatch(ifMatch));
-    }
-
-    private static ResponseEntity<PetResponse> withETag(PetResponse pet) {
-        return ResponseEntity.ok().eTag(ETags.of(pet.version())).body(pet);
+                                                @RequestHeader(value = HttpHeaders.IF_MATCH, required = false)
+                                                String ifMatch,
+                                                @Valid @RequestBody PetPatchRequest request) {
+        log.debug("patchPet({}) called", id);
+        return ok(petService.patch(id, request, ETags.parseIfMatch(ifMatch)));
     }
 }

@@ -2,7 +2,6 @@ package com.interzero.TestServer.controller;
 
 import com.interzero.TestServer.configuration.CanRead;
 import com.interzero.TestServer.configuration.CanWrite;
-import com.interzero.TestServer.dto.HistoryEntry;
 import com.interzero.TestServer.dto.OwnerFilter;
 import com.interzero.TestServer.dto.OwnerPatchRequest;
 import com.interzero.TestServer.dto.OwnerRequest;
@@ -13,17 +12,13 @@ import com.interzero.TestServer.dto.PetResponse;
 import com.interzero.TestServer.service.OwnerService;
 import com.interzero.TestServer.service.PetService;
 import jakarta.validation.Valid;
-import lombok.extern.slf4j.Slf4j;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.lang.NonNull;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,30 +27,19 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-
-import java.net.URI;
-import java.time.OffsetDateTime;
 
 /**
- * The REST controller for all things related to {@link com.interzero.TestServer.entity.Owner}s.
- * Returns {@link OwnerResponse}s, never entities.
+ * The REST controller for {@link com.interzero.TestServer.entity.Owner}s. Returns {@link OwnerResponse}s, never
+ * entities.
  * <p>
- * Handles HTTP concerns only (mapping, status codes, headers); business logic lives in {@link OwnerService} and,
- * for an owner's pets, {@link PetService}. Errors are thrown by the services and turned into responses by
- * {@link com.interzero.TestServer.error.GlobalExceptionHandler}.
- * <p>
- * Single-resource responses carry an {@code ETag}. Sending it back in {@code If-Match} on {@code PUT},
- * {@code PATCH} or {@code DELETE} makes the change fail with 412 if someone else changed the resource first;
- * see {@link ETags}.
+ * {@code GET}, {@code DELETE}, history and as-of for a single owner come from {@link AbstractEntityController}; this
+ * class adds the owner list, the owner's pets, and create and update. Deleting an owner who still has pets returns
+ * 409 (see {@link OwnerService}).
  */
-@Slf4j
 @RestController
 @RequestMapping("owners")
-public class OwnerController {
+public class OwnerController extends AbstractEntityController<OwnerResponse> {
 
     private final OwnerService ownerService;
 
@@ -65,6 +49,7 @@ public class OwnerController {
     private final PetService petService;
 
     public OwnerController(@NonNull OwnerService ownerService, @NonNull PetService petService) {
+        super(ownerService);
         this.ownerService = ownerService;
         this.petService = petService;
     }
@@ -84,22 +69,10 @@ public class OwnerController {
     @GetMapping
     @CanRead
     public PageResponse<OwnerResponse> getOwners(@Valid @ParameterObject OwnerFilter filter,
-                                         @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
-        log.debug("OwnerController.getOwners({}, {}) called", filter, pageable);
+                                                 @ParameterObject @PageableDefault(size = 20, sort = "id")
+                                                 Pageable pageable) {
+        log.debug("getOwners({}, {}) called", filter, pageable);
         return PageResponse.of(ownerService.findAll(filter, Paging.mapSort(pageable, SortableFields.OWNERS)));
-    }
-
-    /**
-     * Gets a single owner.
-     *
-     * @param id The ID of the owner.
-     * @return The owner, or 404 if no owner with this ID exists.
-     */
-    @GetMapping("/{id}")
-    @CanRead
-    public ResponseEntity<OwnerResponse> getOwner(@PathVariable Long id) {
-        log.debug("OwnerController.getOwner({}) called", id);
-        return withETag(ownerService.get(id));
     }
 
     /**
@@ -115,47 +88,11 @@ public class OwnerController {
     @GetMapping("/{id}/pets")
     @CanRead
     public PageResponse<PetResponse> getOwnerPets(@PathVariable Long id,
-                                          @Valid @ParameterObject PetFilter filter,
-                                          @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable) {
-        log.debug("OwnerController.getOwnerPets({}, {}, {}) called", id, filter, pageable);
+                                                  @Valid @ParameterObject PetFilter filter,
+                                                  @ParameterObject @PageableDefault(size = 20, sort = "id")
+                                                  Pageable pageable) {
+        log.debug("getOwnerPets({}, {}, {}) called", id, filter, pageable);
         return PageResponse.of(petService.findByOwner(id, filter, Paging.mapSort(pageable, SortableFields.PETS)));
-    }
-
-    /**
-     * Gets the change history of an owner: who changed it, when, and what it looked like after each
-     * change, newest first. Also works after the owner has been deleted.
-     *
-     * @param id   The ID of the owner.
-     * @param page The zero-based page index.
-     * @param size The page size, at most 100.
-     * @return One page of history entries, or 404 if no owner with this ID has ever existed.
-     */
-    @GetMapping("/{id}/history")
-    @CanRead
-    public PageResponse<HistoryEntry<OwnerResponse>> getOwnerHistory(@PathVariable Long id,
-                                                               @RequestParam(defaultValue = "0") int page,
-                                                               @RequestParam(defaultValue = "20") int size) {
-        log.debug("OwnerController.getOwnerHistory({}, page={}, size={}) called", id, page, size);
-        return PageResponse.of(ownerService.history(id, Paging.of(page, size)));
-    }
-
-    /**
-     * Gets an owner as it was at a point in time, e.g. {@code ?time=2026-09-27T21:11:22Z}. Related data is also
-     * shown as of that moment. The revision fields describe the owner's last change at or before that time.
-     * <p>
-     * The time is ISO-8601 with a time zone; a {@code +} in the offset must be URL-encoded as {@code %2B}.
-     *
-     * @param id   The ID of the owner.
-     * @param time The point in time.
-     * @return The owner at that time, or 404 if it never existed, did not exist yet, or had already been deleted.
-     */
-    @GetMapping("/{id}/history/as-of")
-    @CanRead
-    public HistoryEntry<OwnerResponse> getOwnerAsOf(@PathVariable Long id,
-                                               @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-                                               OffsetDateTime time) {
-        log.debug("OwnerController.getOwnerAsOf({}, {}) called", id, time);
-        return ownerService.asOf(id, time.toInstant());
     }
 
     /**
@@ -167,30 +104,26 @@ public class OwnerController {
     @PostMapping
     @CanWrite
     public ResponseEntity<OwnerResponse> createOwner(@Valid @RequestBody OwnerRequest request) {
-        log.debug("OwnerController.createOwner() called");
-        OwnerResponse created = ownerService.create(request);
-        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
-                .path("/{id}")
-                .buildAndExpand(created.id())
-                .toUri();
-        return ResponseEntity.created(location).eTag(ETags.of(created.version())).body(created);
+        log.debug("createOwner() called");
+        return created(ownerService.create(request));
     }
 
     /**
      * Replaces all fields of an existing owner. The owner's pets are not affected.
      *
-     * @param id       The ID of the owner.
-     * @param ifMatch  Optional {@code ETag} the client last read; if it no longer matches, 412.
-     * @param request  The new state of the owner.
+     * @param id      The ID of the owner.
+     * @param ifMatch Optional {@code ETag} the client last read; if it no longer matches, 412.
+     * @param request The new state of the owner.
      * @return The updated owner, or 404 if no owner with this ID exists.
      */
     @PutMapping("/{id}")
     @CanWrite
     public ResponseEntity<OwnerResponse> updateOwner(@PathVariable Long id,
-                                        @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-                                        @Valid @RequestBody OwnerRequest request) {
-        log.debug("OwnerController.updateOwner({}) called", id);
-        return withETag(ownerService.update(id, request, ETags.parseIfMatch(ifMatch)));
+                                                     @RequestHeader(value = HttpHeaders.IF_MATCH, required = false)
+                                                     String ifMatch,
+                                                     @Valid @RequestBody OwnerRequest request) {
+        log.debug("updateOwner({}) called", id);
+        return ok(ownerService.update(id, request, ETags.parseIfMatch(ifMatch)));
     }
 
     /**
@@ -200,36 +133,18 @@ public class OwnerController {
      * <p>
      * Accepts {@code application/json} and {@code application/merge-patch+json} (RFC 7396), whose semantics match.
      *
-     * @param id       The ID of the owner.
-     * @param ifMatch  Optional {@code ETag} the client last read; if it no longer matches, 412.
-     * @param request  The fields to change.
+     * @param id      The ID of the owner.
+     * @param ifMatch Optional {@code ETag} the client last read; if it no longer matches, 412.
+     * @param request The fields to change.
      * @return The updated owner, or 404 if no owner with this ID exists.
      */
     @PatchMapping(path = "/{id}", consumes = {MediaType.APPLICATION_JSON_VALUE, "application/merge-patch+json"})
     @CanWrite
     public ResponseEntity<OwnerResponse> patchOwner(@PathVariable Long id,
-                                       @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-                                       @Valid @RequestBody OwnerPatchRequest request) {
-        log.debug("OwnerController.patchOwner({}) called", id);
-        return withETag(ownerService.patch(id, request, ETags.parseIfMatch(ifMatch)));
-    }
-
-    /**
-     * Deletes an owner. Fails with 409 if the owner still has pets; they must be reassigned or deleted first.
-     *
-     * @param id       The ID of the owner.
-     * @param ifMatch  Optional {@code ETag} the client last read; if it no longer matches, 412.
-     */
-    @DeleteMapping("/{id}")
-    @CanWrite
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteOwner(@PathVariable Long id,
-                          @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
-        log.debug("OwnerController.deleteOwner({}) called", id);
-        ownerService.delete(id, ETags.parseIfMatch(ifMatch));
-    }
-
-    private static ResponseEntity<OwnerResponse> withETag(OwnerResponse owner) {
-        return ResponseEntity.ok().eTag(ETags.of(owner.version())).body(owner);
+                                                    @RequestHeader(value = HttpHeaders.IF_MATCH, required = false)
+                                                    String ifMatch,
+                                                    @Valid @RequestBody OwnerPatchRequest request) {
+        log.debug("patchOwner({}) called", id);
+        return ok(ownerService.patch(id, request, ETags.parseIfMatch(ifMatch)));
     }
 }

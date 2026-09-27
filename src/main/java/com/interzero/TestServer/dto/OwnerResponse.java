@@ -19,7 +19,7 @@ public record OwnerResponse(
         String nameFirst,
         String nameLast,
         String address,
-        @JsonIgnore @Schema(hidden = true) Long version) {
+        @JsonIgnore @Schema(hidden = true) Long version) implements VersionedResponse {
 
     /**
      * Creates the response for an owner.

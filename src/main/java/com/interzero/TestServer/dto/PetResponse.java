@@ -28,7 +28,7 @@ public record PetResponse(
         Integer age,
         Long ownerId,
         OwnerSummary owner,
-        @JsonIgnore @Schema(hidden = true) Long version) {
+        @JsonIgnore @Schema(hidden = true) Long version) implements VersionedResponse {
 
     /**
      * The owner as shown inside a pet: enough to display who owns the pet without a second request.
